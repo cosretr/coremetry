@@ -81,6 +81,9 @@ type unifiedParams struct {
 	// Gates — v0.10.2473: gürültü kapısı kipi (chstore.MLGates*). İstekten
 	// DEĞİL ayardan gelir (handler doldurur); anahtara girer.
 	Gates string
+	// DetShadow — v0.10.2486: precision kuralı `on` kipinde (ayardan; anahtara
+	// girer). Elenenler gölgedeki dedektörün olaylarını da okur.
+	DetShadow bool
 	// Unattached — v0.10.2481: yalnız açık bir Problem'e bağlı OLMAYAN
 	// satırlar (Sinyaller › Bağlanmamış anomaliler; anomalies_unified_attached.go).
 	// Yalnız servis görünümünde ve liste kipinde anlamlı; başka yerde false.
@@ -140,8 +143,8 @@ func unifiedKey(p unifiedParams, tz string) string {
 	// v6 (v0.10.2481): unattached (Problem'e bağlı satırları düşür) anahtarda.
 	// v7 (v0.10.2482): bağ süzgeci özne grubu üyelerini de düşürür, satır
 	// whyNot taşır, servis süzgeci (fnv) anahtarda.
-	return fmt.Sprintf(unifiedCachePrefix+"v7:sec=%s:sig=%s:off=%d:lim=%d:sort=%s:dir=%s:view=%s:gates=%s:unatt=%t:ev=%x:svc=%x:tz=%s",
-		p.Section, p.Signal, p.Offset, p.Limit, p.Sort, p.Dir, p.View, p.Gates, p.Unattached, h.Sum64(), hs.Sum64(), tz)
+	return fmt.Sprintf(unifiedCachePrefix+"v7:sec=%s:sig=%s:off=%d:lim=%d:sort=%s:dir=%s:view=%s:gates=%s:dsh=%t:unatt=%t:ev=%x:svc=%x:tz=%s",
+		p.Section, p.Signal, p.Offset, p.Limit, p.Sort, p.Dir, p.View, p.Gates, p.DetShadow, p.Unattached, h.Sum64(), hs.Sum64(), tz)
 }
 
 // unifiedAnomalyRow — birleşik satır. Liste kipinde yalnız lider (mlLead YA
@@ -186,6 +189,10 @@ type heldSummary struct {
 // invalid) Elenenler'de bu adla; değer / eşik yok.
 const heldGateInvalid = "invalid_record"
 
+// heldGateDetShadow — v0.10.2486 (precision B.2, on kipi): olayın dedektörü
+// otomatik gölge kuralıyla gölgede; değer / eşik yok.
+const heldGateDetShadow = "detector_shadow"
+
 // heldGatesOf — SAF: olayın kaldığı gürültü kapıları (ml.HeldGates) → yanıt;
 // invalid kayıt tek satır heldGateInvalid.
 func heldGatesOf(e chstore.MLEvent) []heldGate {
@@ -193,6 +200,9 @@ func heldGatesOf(e chstore.MLEvent) []heldGate {
 		return []heldGate{{Name: heldGateInvalid}}
 	}
 	var out []heldGate
+	if _, ok := ml.DetShadowOf(e.Evidence); ok { // v0.10.2486: dedektör gölgede (karne)
+		out = append(out, heldGate{Name: heldGateDetShadow})
+	}
 	for _, g := range ml.HeldGates(e) {
 		out = append(out, heldGate{Name: g.Name, Value: g.Value, Threshold: g.Threshold})
 	}
@@ -268,7 +278,9 @@ func (s *Server) getAnomaliesUnified(w http.ResponseWriter, r *http.Request) {
 	}
 	// v0.10.2473: kip ayardan (kontrol düzlemi önbelleği; ek CH okuması yok)
 	// ve anahtarda — kip değişince eski kipin sayfası sunulmaz.
-	p.Gates = s.store.GetMLConfig(r.Context()).PublishGatesMode()
+	mlCfg := s.store.GetMLConfig(r.Context())
+	p.Gates = mlCfg.PublishGatesMode()
+	p.DetShadow = mlCfg.PrecisionShadowMode() == chstore.MLPrecisionModeOn // v0.10.2486
 	loc := ml.OperatorLocation(s.store.AnomalySensitivityForDetectors())
 	s.serveCached(w, r, unifiedKey(p, loc.String()), unifiedTTL, func(ctx context.Context) (any, error) {
 		return s.buildAnomaliesUnified(ctx, p, loc)
@@ -284,6 +296,10 @@ func heldOnly(items []chstore.MLEvent, gates string) []chstore.MLEvent {
 	out := items[:0:0]
 	for _, e := range items {
 		if e.PublishState == ml.PublishInvalid {
+			out = append(out, e)
+			continue
+		}
+		if _, ok := ml.DetShadowOf(e.Evidence); ok { // v0.10.2486: yalnız on kipinde damgalı
 			out = append(out, e)
 			continue
 		}
@@ -311,6 +327,7 @@ func (s *Server) buildAnomaliesUnified(ctx context.Context, p unifiedParams, loc
 		view = chstore.MLViewService
 	}
 	mlf := unifiedMLFilter(view, since, p.Gates)
+	mlf.DetShadow = p.DetShadow && view == chstore.MLViewHeld
 	mlf.Service = p.Service // v0.10.2482: ?service= SQL'de
 	items, mlErr := s.store.ListMLEvents(ctx, mlf)
 	var legacy []chstore.AnomalyEvent

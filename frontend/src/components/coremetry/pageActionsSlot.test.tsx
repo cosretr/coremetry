@@ -188,7 +188,7 @@ const CONVERTED: Record<string, string> = {
   'pages/Monitors.tsx': '+ New monitor',
   'pages/Dashboards.tsx': '+ New dashboard',
   'pages/Slos.tsx': '+ New SLO',
-  'pages/Alerts.tsx': '+ New alert rule',
+  'pages/Alerts.tsx': "tn('alertsP.newAlertRule')", // v0.10.2486 — '+ New alert rule' katalogda
 };
 
 describe('v0.10.1319 K1 — dönüştürülen 6 sayfa primary\'yi actions yuvasında taşıyor', () => {
@@ -245,7 +245,7 @@ describe('v0.10.1319 K1 — sayfa özel çiviler', () => {
     expect(src).toMatch(/<ActionRow[\s/>]/);
     expect(src).toContain('onClick={startNew}');
     // Empty-state CTA yerinde (lib/errorLeg.test.ts ona bakıyor).
-    expect(src).toContain('+ New rule</Button>');
+    expect(src).toContain("{tn('alertsP.newRule')}</Button>"); // v0.10.2486 — '+ New rule' katalogda
   });
 
   it('Slos: + New SLO md boy (size="sm" yok)', () => {

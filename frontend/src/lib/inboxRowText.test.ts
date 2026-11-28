@@ -57,8 +57,8 @@ describe('inboxRowText', () => {
 
 describe('inboxKindLabel (v0.10.2121, Tür kolonu)', () => {
   it.each([
-    ['problem', 'Alarm'], ['exception', 'Exception'], ['httperror', 'HTTP hatası'],
-    ['anomaly', 'Anomali'], ['incident', 'Incident'], ['yeni', 'Kaynak X'],
+    ['problem', 'Kural'], ['exception', 'Hata'], ['httperror', 'HTTP hatası'],
+    ['anomaly', 'Sinyal'], ['incident', 'Incident'], ['yeni', 'Kaynak X'],
   ])('%s → %s', (kind, want) => {
     expect(inboxKindLabel({ kind, source: 'Kaynak X' } as Pick<InboxItem, 'kind' | 'source'>)).toBe(want);
   });

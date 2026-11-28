@@ -16,6 +16,7 @@ import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { useT } from '@/lib/i18n';
 
 // Dynatrace-style "service consumers" / backtrace view. One row per
 // distinct (caller service × pod/instance × client IP × user-agent)
@@ -42,6 +43,7 @@ const BACKTRACE_COLS: DataTableColumn<CallerRow>[] = [
 ];
 
 function BacktraceInner() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const svc = searchParams.get('name') ?? '';
@@ -107,7 +109,7 @@ function BacktraceInner() {
   if (!svc) {
     return (
       <>
-        <Topbar title="Backtrace" range={range} onRangeChange={setRange} />
+        <Topbar title={tn('page.backtrace')} range={range} onRangeChange={setRange} />
         <PageShell><Empty icon="⚠" title="Missing service name" /></PageShell>
       </>
     );
@@ -115,7 +117,7 @@ function BacktraceInner() {
 
   return (
     <>
-      <Topbar title={`Backtrace · ${svc}`} range={range} onRangeChange={setRange} />
+      <Topbar title={`${tn('page.backtrace')} · ${svc}`} range={range} onRangeChange={setRange} />
       <PageShell>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
           <Link to={serviceHref(svc, { range })} className="sec" style={{

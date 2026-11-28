@@ -17,7 +17,7 @@ import {
 import { serviceHref, pointEventWindow } from '@/lib/serviceHref';
 import type { NotificationLogEntry } from '@/lib/types';
 import { UNMATCHED_KIND } from '@/lib/notifyRouting';
-import { t, useLang } from '@/lib/i18n'; // v0.10.2298 — "kimseye gitmedi" işareti arayüz dilinde (TR aynı)
+import { t, useLang, useT } from '@/lib/i18n'; // v0.10.2298 — "kimseye gitmedi" işareti arayüz dilinde (TR aynı)
 import { PageShell } from '@/components/coremetry/PageShell';
 
 // v0.6.15 — Operator events list/delete UI.
@@ -84,6 +84,7 @@ const KIND_COLOURS: Record<string, string> = {
 //   • Annotations — the original operator-marked event markers.
 // Tab rides ?tab= so links land on the right list.
 export default function EventsPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const confirm = useConfirm();
   const [range, setRange] = useUrlRange('24h');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -102,7 +103,7 @@ export default function EventsPage() {
 
   return (
     <>
-      <Topbar title="Events" range={range} onRangeChange={setRange} />
+      <Topbar title={tn('nav.events')} range={range} onRangeChange={setRange} />
       <PageShell>
         <TabStrip ariaLabel="Event kinds" value={tab} onChange={setTab} style={{ marginBottom: 12 }}
           tabs={[{ key: 'notifications', label: 'Notifications' }, { key: 'annotations', label: 'Annotations' }]} />

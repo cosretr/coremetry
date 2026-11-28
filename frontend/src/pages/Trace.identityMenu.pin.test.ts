@@ -55,7 +55,7 @@ describe('Trace kimlik seçim menüsü (v0.10.568)', () => {
     // Tetik hand-rolled <button> değil, aria-label'lı IconButton (a11y kapısı).
     expect(src).toContain("import { IconButton, MenuItem } from '@/components/ui';");
     expect(src).toContain('<IconButton');
-    expect(src).toMatch(/aria-label=\{`\$\{l\.label\}: kimlik seç \(\$\{identities\.length\} aday\)`\}/);
+    expect(src).toContain("aria-label={t('traceD.ext.pickAria').replace('{label}', l.label).replace('{n}', String(identities.length))}"); // v0.10.2486 — katalogda
     expect(src).toContain('aria-haspopup="menu"');
     expect(src).toContain('aria-expanded={open}');
     expect(src).toContain('icon="▾"');
@@ -64,8 +64,8 @@ describe('Trace kimlik seçim menüsü (v0.10.568)', () => {
     expect(src).toContain('<MenuItem');
     expect(src).not.toMatch(/<button[\s\S]{0,80}role="menuitem"/);
     // Başlık + aday sayısı (onaylanmış mockup).
-    expect(src).toContain('Hangi işlem?');
-    expect(src).toContain('{identities.length} farklı kimlik');
+    expect(src).toContain("t('traceD.ext.which')") // v0.10.2486 — katalogda;
+    expect(src).toContain("t('traceD.ext.count').replace('{n}', String(identities.length))") // v0.10.2486 — katalogda;
   });
 
   it('satır tıklaması AYNI şablonu override’lı ctx ile çözer', () => {
@@ -74,7 +74,7 @@ describe('Trace kimlik seçim menüsü (v0.10.568)', () => {
     expect(src).toContain('renderExternalLink(l.urlTemplate, octx)');
     // Çözülmeyen aday PASİF satır, title eksikleri söyler (sessizce kaybolmaz).
     expect(src).toContain('disabled={!cu}');
-    expect(src).toContain('bu kimlikle çözülemeyen alanlar — ${cm.join(\', \')}');
+    expect(src).toContain("t('traceD.ext.candMissing').replace('{fields}', cm.join(', '))");
     // Kısaltma + rol etiketi + tam değer title'da.
     expect(src).toContain('shortIdentity(cand.value)');
     expect(src).toContain('identityRoleTR(cand.role)');
@@ -124,7 +124,7 @@ describe('log bölümü başlığı', () => {
   it('anahtar + kaynak', () => {
     // v0.10.572 — başlık logdaki GERÇEK alan adını taşır (AcmRequestId);
     // log tarafı da anahtara göre gruplanır.
-    expect(src).toContain('${key} · log gövdesinden');
+    expect(src).toContain("t('traceD.ext.fromLog').replace('{key}', key)");
     expect(src).toContain("r.cand.key || (isLog ? 'request_id' : 'span attribute')");
   });
 });

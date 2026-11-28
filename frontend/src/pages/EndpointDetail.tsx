@@ -77,6 +77,7 @@ import { endpointAiMethod, type AISubject } from '@/lib/aiSubject';
 // pre-v0.9.839 `?endpoint=` / `?detail=` codecs still resolve, via the
 // one redirect effect on /endpoints.
 export default function EndpointDetailPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const [params, setParams] = useSearchParams();
   const search = params.toString();
   const refObj = useMemo(() => parseEndpointPageRef(search), [search]);
@@ -223,7 +224,7 @@ export default function EndpointDetailPage() {
   if (!refObj) {
     return (
       <>
-        <Topbar title="Endpoint" />
+        <Topbar title={tn('page.endpoint')} />
         <PageShell>
           <Empty icon="⚠" title="No endpoint in this link">
             The URL is missing <code>service</code> or <code>path</code>.
@@ -236,7 +237,7 @@ export default function EndpointDetailPage() {
 
   return (
     <>
-      <Topbar title="Endpoint" range={range} onRangeChange={setRange} envApplies />
+      <Topbar title={tn('page.endpoint')} range={range} onRangeChange={setRange} envApplies />
       <PageShell>
         <div style={{ fontSize: 11.5, color: 'var(--text3)', marginBottom: 8 }}>
           {/* v0.9.1320 — kırıntı linki pencereyi + env'i taşır (navHref). */}

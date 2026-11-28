@@ -34,8 +34,8 @@ describe('action bloğu kablolaması', () => {
 // v0.10.546 — link satırı: etiketli, iç/dış çip aynı sınıf; eski 10 px rozet yok.
 describe('cevap link satırı', () => {
   it('"Aç →" başlığı + .ai-link çipler; badge b-info kalmadı', () => {
-    expect(bubble).toContain('className="ai-links" role="group" aria-label="İlgili sayfalar"');
-    expect(bubble).toContain('<span className="ai-links__cap">Aç →</span>');
+    expect(bubble).toContain('className="ai-links" role="group" aria-label={t(\'chatB.links.aria\', lang)}'); // v0.10.2486 — metin katalogda
+    expect(bubble).toContain('<span className="ai-links__cap">{t(\'chatB.links.cap\', lang)}</span>');
     expect(bubble.split('className="ai-link"').length - 1).toBe(2);
     // (badge b-info başka çiplerde meşru; link satırındaki 10 px rozet kalktı)
     expect(bubble).not.toContain("className=\"badge b-info\"\n                style={{ textDecoration: 'none', fontSize: 10 }}");

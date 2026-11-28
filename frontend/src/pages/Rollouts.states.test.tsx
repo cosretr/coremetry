@@ -242,10 +242,10 @@ describe('Rollouts Canlı — v2 kaynağı (P2.3)', () => {
     expect(liveTable(el).querySelector('tbody tr[data-dt-state="empty"]')!.textContent).toContain('KSM dedektörü');
   });
 
-  it('kapalı: sayfa adı «Deployment/Rollouts kapalı», Ayarlar sekmesine yönlendirmez', () => {
+  it('kapalı: sayfa adı «Değişiklikler kapalı», Ayarlar sekmesine yönlendirmez', () => {
     h.list = { data: { disabled: true } as RolloutListResponse, isPending: false, error: null };
     const el = mount('/rollouts');
-    expect(el.textContent).toContain('Deployment/Rollouts kapalı');
+    expect(el.textContent).toContain('Değişiklikler kapalı');
     expect(el.textContent).not.toContain('Settings → Rollouts');
   });
 });

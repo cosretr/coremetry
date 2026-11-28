@@ -34,6 +34,15 @@ import { __resetCopilotEnabledCache } from './ai/useCopilotEnabled';
 import { AuthProvider } from '@/components/AuthProvider';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
 import { CopilotChat } from '@/components/CopilotChat';
+import { setUserLang } from '@/lib/i18n';
+// v0.10.2486 dilim 2 — metinler katalogda; bu test Türkçe arayüzü pinler.
+// localStorage Node'da yok/boş olabilir: dil tercihi için bellek içi depo.
+beforeEach(() => {
+  const mem = new Map<string, string>();
+  vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, String(v)); }, removeItem: (k: string) => { mem.delete(k); } });
+  setUserLang('tr');
+});
+afterEach(() => { setUserLang(null); vi.unstubAllGlobals(); });
 
 const TRACE = '0af7651916cd43dd8448eb211c80319c';
 const TEXT = '**Kök Neden ve Sonraki Adım**\n- OrderService.load boş sipariş döndürüyor. Kontrol: com.example.orders.OrderService:42.';

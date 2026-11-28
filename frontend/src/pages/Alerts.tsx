@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Topbar } from '@/components/Topbar';
 import { ServicePicker } from '@/components/ServicePicker';
 import { Button, Chip, SegmentedControl, useConfirm } from '@/components/ui';
@@ -29,6 +29,7 @@ import { WatcherImportModal } from './alerts/WatcherImportModal';
 import { Link } from 'react-router';
 import { PageControls } from '@/components/coremetry/PageControls';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { t, tf, useLang, useT, type Lang } from '@/lib/i18n';
 
 // alertTypeLabel — Type hücresinin bastığı rozet metni. Sıralama accessor'ı
 // buradan okuyor ki kolon GÖRÜNENE göre sıralansın (ham `metric` alanı
@@ -52,20 +53,23 @@ function alertTypeLabel(r: AlertRule): string {
 // taşır; alarm→veri yolu (satırdan Inbox'a) buradan açılır.
 type AlertRuleRow = AlertRule & { openProblems: number };
 
-const ALERT_RULE_COLS: DataTableColumn<AlertRuleRow>[] = [
-  { id: 'name',      label: 'Name',      sortValue: r => r.name,                     naturalDir: 'asc', width: 220 },
-  { id: 'service',   label: 'Service',   sortValue: r => r.service ?? '',            naturalDir: 'asc', width: 160 },
+const alertRuleCols = (lang: Lang): DataTableColumn<AlertRuleRow>[] => [
+  { id: 'name',      label: t('alertsP.col.name', lang),      sortValue: r => r.name,                     naturalDir: 'asc', width: 220 },
+  { id: 'service',   label: t('alertsP.col.service', lang),   sortValue: r => r.service ?? '',            naturalDir: 'asc', width: 160 },
   // Condition hücresi üç ayrı şekil basıyor (ES watcher / log watcher /
   // metrik); ortak eksen kuralın metriği, gruplamayı o veriyor.
-  { id: 'condition', label: 'Condition', sortValue: r => r.metric,                   naturalDir: 'asc', flex: true },
-  { id: 'window',    label: 'Window',    sortValue: r => r.windowSec,                numeric: true, width: 95 },
-  { id: 'severity',  label: 'Severity',  sortValue: r => SEVERITIES.indexOf(r.severity), width: 105 },
-  { id: 'problems',  label: 'Open problems', sortValue: r => r.openProblems,         numeric: true, width: 125 },
-  { id: 'enabled',   label: 'Enabled',   sortValue: r => (r.enabled ? 1 : 0),        width: 95 },
-  { id: 'type',      label: 'Type',      sortValue: r => alertTypeLabel(r),          naturalDir: 'asc', width: 120 },
+  { id: 'condition', label: t('alertsP.col.condition', lang), sortValue: r => r.metric,                   naturalDir: 'asc', flex: true },
+  { id: 'window',    label: t('alertsP.col.window', lang),    sortValue: r => r.windowSec,                numeric: true, width: 95 },
+  { id: 'severity',  label: t('alertsP.col.severity', lang),  sortValue: r => SEVERITIES.indexOf(r.severity), width: 105 },
+  { id: 'problems',  label: t('alertsP.col.problems', lang), sortValue: r => r.openProblems,         numeric: true, width: 125 },
+  { id: 'enabled',   label: t('alertsP.col.enabled', lang),   sortValue: r => (r.enabled ? 1 : 0),        width: 95 },
+  { id: 'type',      label: t('alertsP.col.type', lang),      sortValue: r => alertTypeLabel(r),          naturalDir: 'asc', width: 120 },
 ];
 
 export default function AlertsPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
+  const lang = useLang();
+  const ruleCols = useMemo(() => alertRuleCols(lang), [lang]);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   // v0.8.424 — operator-reported: viewers saw + New rule / Edit /
@@ -98,17 +102,20 @@ export default function AlertsPage() {
   useEffect(() => { reloadPresets(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user]);
   const saveAsPreset = async () => {
     if (!user) {
-      alert('Sign in to save presets.');
+      alert(tn('alertsP.preset.signIn'));
       return;
     }
-    const name = window.prompt('Save preset as:', draft.name || '');
+    const name = window.prompt(tn('alertsP.preset.promptName'), draft.name || '');
     if (!name) return;
     const wantShared = isAdmin && await confirm({
-      title: 'Preset kimlere görünsün?',
-      body: <><b>{name}</b> preset’i kaydediliyor. <b>Takıma açık</b> seçilirse
-        organizasyondaki herkes görür; <b>yalnız bana</b> seçilirse sadece sen.</>,
-      confirmLabel: 'Takıma açık kaydet',
-      cancelLabel: 'Yalnız bana',
+      title: tn('alertsP.preset.shareTitle'),
+      body: <>{tfNodes(tn('alertsP.preset.shareBody'), {
+        name: <b>{name}</b>,
+        shared: <b>{tn('alertsP.preset.teamOpen')}</b>,
+        mine: <b>{tn('alertsP.preset.justMeInline')}</b>,
+      })}</>,
+      confirmLabel: tn('alertsP.preset.saveShared'),
+      cancelLabel: tn('alertsP.preset.justMe'),
     });
     try {
       // Strip the per-rule `service` field so the preset is
@@ -125,22 +132,21 @@ export default function AlertsPage() {
       });
       reloadPresets();
     } catch (e) {
-      alert('Failed to save preset: ' + (e instanceof Error ? e.message : String(e)));
+      alert(tf('alertsP.preset.saveFailed', lang, { err: e instanceof Error ? e.message : String(e) }));
     }
   };
   const deletePreset = async (id: string, name: string) => {
     if (!await confirm({
-      title: 'Hazır ayar silinsin mi?',
-      body: <><b>{name}</b> preset’i silinecek. Bu preset’ten türetilmiş
-        MEVCUT kurallar etkilenmez — yalnız şablon kaybolur.</>,
-      confirmLabel: 'Preset’i sil',
+      title: tn('alertsP.preset.deleteTitle'),
+      body: <>{tfNodes(tn('alertsP.preset.deleteBody'), { name: <b>{name}</b> })}</>,
+      confirmLabel: tn('alertsP.preset.deleteConfirm'),
       danger: true,
     })) return;
     try {
       await api.deleteSavedView(id);
       reloadPresets();
     } catch (e) {
-      alert('Failed to delete preset: ' + (e instanceof Error ? e.message : String(e)));
+      alert(tf('alertsP.preset.deleteFailed', lang, { err: e instanceof Error ? e.message : String(e) }));
     }
   };
   // Export / import (v0.5.172). Export bundles every preset
@@ -152,7 +158,7 @@ export default function AlertsPage() {
   // they have admin role.
   const exportPresets = () => {
     if (presets.length === 0) {
-      alert('No presets to export.');
+      alert(tn('alertsP.preset.noneToExport'));
       return;
     }
     const payload = {
@@ -184,10 +190,10 @@ export default function AlertsPage() {
   const importPresets = async (file: File) => {
     let text: string;
     try { text = await file.text(); }
-    catch (e) { alert('Failed to read file: ' + (e instanceof Error ? e.message : String(e))); return; }
+    catch (e) { alert(tf('alertsP.import.readFailed', lang, { err: e instanceof Error ? e.message : String(e) })); return; }
     let parsed: unknown;
     try { parsed = JSON.parse(text); }
-    catch { alert('File is not valid JSON.'); return; }
+    catch { alert(tn('alertsP.import.badJson')); return; }
     // Loose shape match — we accept both the envelope above
     // AND a bare array (e.g. an operator hand-edits a
     // sub-set), so the export round-trip is forgiving.
@@ -203,15 +209,13 @@ export default function AlertsPage() {
         .flatMap(p => p.name && p.draft ? [{ name: p.name, draft: p.draft }] : []);
     }
     if (entries.length === 0) {
-      alert('No valid presets found in the file.');
+      alert(tn('alertsP.import.noneValid'));
       return;
     }
     if (!await confirm({
-      title: 'Preset’ler içe aktarılsın mı?',
-      body: <>Dosyadan <b>{entries.length}</b> preset eklenecek. Aynı adlı bir
-        preset varsa sunucu (ad, sayfa) çiftinde tekilleştirir — yani tekrar
-        içe aktarmak kopya üretmez.</>,
-      confirmLabel: `${entries.length} preset’i ekle`,
+      title: tn('alertsP.import.title'),
+      body: <>{tfNodes(tn('alertsP.import.body'), { count: <b>{entries.length}</b> })}</>,
+      confirmLabel: tf('alertsP.import.confirm', lang, { count: entries.length }),
     })) {
       return;
     }
@@ -227,7 +231,7 @@ export default function AlertsPage() {
     const failed = results.filter(r => r.status === 'rejected').length;
     reloadPresets();
     if (failed > 0) {
-      alert(`Imported ${entries.length - failed} preset${entries.length - failed === 1 ? '' : 's'}; ${failed} failed.`);
+      alert(tf('alertsP.import.partial', lang, { n: entries.length - failed, failed }));
     }
   };
   // Non-null while editing — `id` of the row we're editing. Drives the
@@ -266,7 +270,7 @@ export default function AlertsPage() {
     // 'alert-rules' ALINMIŞ — tarihsel bir isimle /problems tablosuna ait
     // (ProblemsSection.tsx); aynı anahtarı kullanmak iki tablonun sırasını
     // ve `s_alert-rules` URL paramını birbirine bağlardı.
-    storageKey: 'alert-rules-list', columns: ALERT_RULE_COLS,
+    storageKey: 'alert-rules-list', columns: ruleCols,
     rows: (rules ?? []).map(r => ({ ...r, openProblems: problemCounts[r.id] ?? 0 })),
   });
   const createRule = useCreateAlertRule();
@@ -286,7 +290,7 @@ export default function AlertsPage() {
   // Filtreleri temizle (= All çipi): eskiden kural VARKEN "No alert rules"
   // yazıyordu. Kaynak gerçekten boşsa çip seçili kalsa da boş durum.
   const newRuleCta = canEdit && (
-    <Button variant="primary" onClick={() => setShowForm(true)}>+ New rule</Button>
+    <Button variant="primary" onClick={() => setShowForm(true)}>{tn('alertsP.newRule')}</Button>
   );
   const rulesErr = rulesQ.error instanceof Error ? rulesQ.error.message : '';
   const tableState: Omit<DataTableStateProps<AlertRuleRow>, 'dt'> =
@@ -294,19 +298,17 @@ export default function AlertsPage() {
     : rules === null ? {
         kind: 'error',
         onRetry: () => void rulesQ.refetch(),
-        message: `Alarm kuralları okunamadı${rulesErr ? `: ${rulesErr}` : ''} — bu bir okuma hatası, boş kural kümesi değil; `
-          + 'başarılı olana dek yerine yeni kural oluşturma.',
+        message: tf('alertsP.loadError', lang, { err: rulesErr ? `: ${rulesErr}` : '' }),
       }
     : ruleKind !== 'all' && (rulesAll?.length ?? 0) > 0 ? {
         kind: 'no-match',
-        message: ruleKind === 'watcher' ? 'Watcher türünde alarm kuralı yok' : 'Metrik türünde alarm kuralı yok',
+        message: ruleKind === 'watcher' ? tn('alertsP.noMatch.watcher') : tn('alertsP.noMatch.metric'),
         onClearFilters: () => setRuleKind('all'),
         detail: newRuleCta,
       }
     : {
         kind: 'empty',
-        message: 'Alarm kuralı yok — alarm kuralları anomali dedektörlerini ve eşik kontrollerini adlandırılmış, '
-          + 'yönlendirilebilir problemlere çevirir; ya da mevcut yapılandırmanı SQL playground üzerinden içe aktar.',
+        message: tn('alertsP.empty'),
         detail: newRuleCta,
       };
 
@@ -380,10 +382,12 @@ export default function AlertsPage() {
   // definition" case.
   const remove = async (id: string, name: string) => {
     if (!await confirm({
-      title: 'Kuralı kalıcı olarak sil?',
-      body: <><b>{name}</b> kuralının tanımı ClickHouse'dan tamamen kaldırılacak; geri
-        alınamaz. Kuralı kaybetmeden susturmak istiyorsan <b>Disable</b> kullan.</>,
-      confirmLabel: 'Kuralı sil',
+      title: tn('alertsP.remove.title'),
+      body: <>{tfNodes(tn('alertsP.remove.body'), {
+        name: <b>{name}</b>,
+        disable: <b>{tn('alertsP.disable')}</b>,
+      })}</>,
+      confirmLabel: tn('alertsP.remove.confirm'),
       danger: true,
     })) return;
     await deleteRule.mutateAsync(id);
@@ -397,23 +401,23 @@ export default function AlertsPage() {
 
   return (
     <>
-      <Topbar title="Alert rules" />
+      <Topbar title={tn('nav.alerts')} />
       <PageShell>
         {/* v0.10.1319 K1 — eylem yuvası: ikincil (Import) primary'nin solunda. */}
         <PageControls style={{ marginBottom: 14 }}
           actions={canEdit && (
             <>
               <Button variant="secondary" onClick={() => setShowImport(true)}
-                      title="Paste an Elasticsearch Watcher definition (PUT _watcher/watch body) and import it as an alert rule">
-                ⤓ Import ES watcher
+                      title={tn('alertsP.importEs.title')}>
+                {tn('alertsP.importEs')}
               </Button>
-              <Button variant="primary" onClick={startNew}>+ New alert rule</Button>
+              <Button variant="primary" onClick={startNew}>{tn('alertsP.newAlertRule')}</Button>
             </>
           )}>
           {/* v0.10.1069 — "Built-in rules ship pre-configured" cümlesi kalktı:
               yerleşikler artık varsayılan kapalı (tablonun üstündeki not). */}
           <span style={{ color: 'var(--text2)', fontSize: 12 }}>
-            Evaluator runs every minute.
+            {tn('alertsP.evaluatorNote')}
           </span>
         </PageControls>
 
@@ -452,7 +456,7 @@ export default function AlertsPage() {
                   fontWeight: 600, letterSpacing: '0.5px',
                   textTransform: 'uppercase', marginBottom: 6,
                 }}>
-                  Start from template
+                  {tn('alertsP.fromTemplate')}
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {TEMPLATES.map(t => (
@@ -472,14 +476,14 @@ export default function AlertsPage() {
                     fontWeight: 600, letterSpacing: '0.5px',
                     textTransform: 'uppercase',
                   }}>
-                    My presets
+                    {tn('alertsP.myPresets')}
                   </div>
                   <span style={{ flex: 1 }} />
                   {presets.length > 0 && (
                     <Button variant="secondary" size="sm"
                       onClick={exportPresets}
-                      title="Download all visible presets as a JSON file">
-                      ↓ Export
+                      title={tn('alertsP.export.title')}>
+                      {tn('alertsP.export')}
                     </Button>
                   )}
                   <label className="sec"
@@ -488,8 +492,8 @@ export default function AlertsPage() {
                       borderRadius: 6, border: '1px solid var(--border)',
                       cursor: 'pointer', background: 'var(--bg3)',
                     }}
-                    title="Upload a JSON file exported from another Coremetry install">
-                    ↑ Import
+                    title={tn('alertsP.import.fileTitle')}>
+                    {tn('alertsP.import')}
                     <input type="file" accept="application/json,.json"
                       style={{ display: 'none' }}
                       onChange={e => {
@@ -503,43 +507,43 @@ export default function AlertsPage() {
                     {presets.map(p => (
                       <Chip key={p.id}
                         onClick={() => setDraft({ ...emptyDraft, ...p.draft })}
-                        title={`Load preset · ${p.shared ? 'shared with team' : 'personal'}`}
+                        title={tf('alertsP.preset.loadTitle', lang, { scope: p.shared ? tn('alertsP.preset.scopeShared') : tn('alertsP.preset.scopePersonal') })}
                         onRemove={() => void deletePreset(p.id, p.name)}
-                        removeLabel={`Delete preset ${p.name}`}>
+                        removeLabel={tf('alertsP.preset.deleteLabel', lang, { name: p.name })}>
                         {p.shared ? '◍ ' : '★ '}{p.name}
                       </Chip>
                     ))}
                   </div>
                 ) : (
                   <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-                    None yet — save the current draft or import a JSON bundle.
+                    {tn('alertsP.preset.none')}
                   </div>
                 )}
               </div>
             )}
             <div className="grid-3" style={{ display: 'grid', gap: 10 }}>
-              <Field label="Name">
+              <Field label={tn('alertsP.col.name')}>
                 <input value={draft.name ?? ''}
                   onChange={e => setDraft({ ...draft, name: e.target.value })}
-                  placeholder="e.g. High error rate on api-gateway" />
+                  placeholder={tn('alertsP.f.namePh')} />
               </Field>
-              <Field label={draft.target ? 'Service' : 'Service (empty = all)'}>
+              <Field label={draft.target ? tn('alertsP.col.service') : tn('alertsP.f.serviceAll')}>
                 {draft.target?.kind === 'http_route'
                   ? <div className="mono" style={{ fontSize: 12, color: 'var(--text2)', padding: '6px 0' }}
-                      title="Route hedefi Endpoints satırından kurulur; kapsam burada değiştirilmez.">
+                      title={tn('alertsP.f.routeTitle')}>
                       {draft.target.service} · {draft.target.route}
                     </div>
                   : draft.target?.kind === 'kafka_client'
                   ? <div className="mono" style={{ fontSize: 12, color: 'var(--text2)', padding: '6px 0' }}
-                      title="Kafka istemci hedefi çekmece/Infra panelinden kurulur; kapsam burada değiştirilmez.">
-                      {draft.target.service}{draft.target.topic ? ` · topic ${draft.target.topic}` : ' · tüm topic\'ler'}{draft.target.clientId ? ` · istemci ${draft.target.clientId}` : ''}
+                      title={tn('alertsP.f.kafkaTitle')}>
+                      {draft.target.service}{` · ${draft.target.topic ? tf('alertsP.f.kafkaTopic', lang, { topic: draft.target.topic }) : tn('alertsP.f.kafkaAllTopics')}`}{draft.target.clientId ? ` · ${tf('alertsP.f.kafkaClient', lang, { id: draft.target.clientId })}` : ''}
                     </div>
                   : draft.target
-                  ? <div style={{ fontSize: 12, color: 'var(--text3)', padding: '6px 0' }}>— all callers of the statement —</div>
+                  ? <div style={{ fontSize: 12, color: 'var(--text3)', padding: '6px 0' }}>{tn('alertsP.f.allCallersStmt')}</div>
                   : <ServicePicker value={draft.service ?? ''} onChange={v => setDraft({ ...draft, service: v })}
-                      placeholder="Service…" width="100%" />}
+                      placeholder={tn('alertsP.f.servicePh')} width="100%" />}
               </Field>
-              <Field label="Severity">
+              <Field label={tn('alertsP.col.severity')}>
                 <select value={draft.severity}
                   onChange={e => setDraft({ ...draft, severity: e.target.value })}>
                   {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -548,7 +552,7 @@ export default function AlertsPage() {
               {/* v0.10.331 — hedef: belirli bir DB ifadesi (SQL arayıp seç). Seçilince
                   metrik ailesi db_stmt_* (p95 varsayılan), servis = tüm çağıranlar. */}
               {draft.target?.kind !== 'kafka_client' && draft.target?.kind !== 'http_route' && (
-              <Field label="Target — DB statement (optional)">
+              <Field label={tn('alertsP.f.target')}>
                 <StatementPicker value={draft.target} service={draft.service ?? ''} onChange={t => setDraft(d => ({
                   ...d, target: t, service: t ? '' : d.service,
                   metric: t ? (isDbStmtMetric(d.metric) ? d.metric : 'db_stmt_p95_ms') : (isDbStmtMetric(d.metric) ? 'error_rate' : d.metric),
@@ -558,19 +562,19 @@ export default function AlertsPage() {
                 }))} />
               </Field>
               )}
-              <Field label="Metric">
+              <Field label={tn('alertsP.f.metric')}>
                 <select value={draft.metric}
                   onChange={e => setDraft({ ...draft, metric: e.target.value })}>
                   {targetMetrics(draft.target?.kind).map(m => <option key={m.v} value={m.v}>{m.label}</option>)}
                 </select>
               </Field>
-              <Field label="Comparator">
+              <Field label={tn('alertsP.f.comparator')}>
                 <select value={draft.comparator}
                   onChange={e => setDraft({ ...draft, comparator: e.target.value })}>
                   {COMPARATORS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </Field>
-              <Field label={draft.target?.kind === 'http_route' ? `Threshold (${httpRouteUnit(draft.metric)})` : draft.target?.kind === 'kafka_client' ? 'Threshold' : draft.target ? 'Threshold (ms)' : 'Threshold'}>
+              <Field label={draft.target?.kind === 'http_route' ? tf('alertsP.f.thresholdUnit', lang, { unit: httpRouteUnit(draft.metric) }) : draft.target?.kind === 'kafka_client' ? tn('alertsP.f.threshold') : draft.target ? tf('alertsP.f.thresholdUnit', lang, { unit: 'ms' }) : tn('alertsP.f.threshold')}>
                 {draft.target ? (
                   <input type="number" min={1} step={50} value={draft.threshold ?? 1000}
                     onChange={e => setDraft({ ...draft, threshold: Number(e.target.value) })} />
@@ -586,7 +590,7 @@ export default function AlertsPage() {
                 />
                 )}
               </Field>
-              <Field label="Window">
+              <Field label={tn('alertsP.col.window')}>
                 <select value={draft.windowSec}
                   onChange={e => setDraft({ ...draft, windowSec: Number(e.target.value) })}>
                   {WINDOWS.map(w => <option key={w.v} value={w.v}>{w.label}</option>)}
@@ -602,25 +606,25 @@ export default function AlertsPage() {
                   • Cooldown — post-resolution silence (kills jitter) */}
             <div className="grid-3" style={{ marginTop: 10,
               display: 'grid', gap: 10 }}>
-              <Field label="Sustain (sec) — fires only after breach holds this long">
+              <Field label={tn('alertsP.f.sustain')}>
                 <input type="number" min={0} step={30}
                   value={draft.forSec ?? 0}
                   onChange={e => setDraft({ ...draft, forSec: Number(e.target.value) })}
-                  placeholder="0 = immediate"
+                  placeholder={tn('alertsP.f.sustainPh')}
                   style={{ width: '100%' }} />
               </Field>
-              <Field label="Min samples — require N requests in window">
+              <Field label={tn('alertsP.f.minSamples')}>
                 <input type="number" min={0} step={10}
                   value={draft.minSamples ?? 0}
                   onChange={e => setDraft({ ...draft, minSamples: Number(e.target.value) })}
-                  placeholder="0 = no floor"
+                  placeholder={tn('alertsP.f.minSamplesPh')}
                   style={{ width: '100%' }} />
               </Field>
-              <Field label="Cooldown (sec) — silence after auto-resolve">
+              <Field label={tn('alertsP.f.cooldown')}>
                 <input type="number" min={0} step={60}
                   value={draft.cooldownSec ?? 0}
                   onChange={e => setDraft({ ...draft, cooldownSec: Number(e.target.value) })}
-                  placeholder="0 = immediate re-open"
+                  placeholder={tn('alertsP.f.cooldownPh')}
                   style={{ width: '100%' }} />
               </Field>
             </div>
@@ -628,9 +632,9 @@ export default function AlertsPage() {
                 detail when the rule fires so the oncall lands
                 on the team's playbook in one click. */}
             <div style={{ marginTop: 10 }}>
-              <Field label="Runbook URL (optional)">
+              <Field label={tn('alertsP.f.runbook')}>
                 <input value={draft.runbookUrl ?? ''}
-                  onChange={e => setDraft({ ...draft, runbookUrl: e.target.value })}
+                  onChange={e => setDraft({ ...draft, runbookUrl: e.target.value })} /* i18n-exempt: örnek URL */
                   placeholder="https://wiki.internal/runbook/high-error-rate"
                   style={{ width: '100%' }} />
                 <RunbookUrlHint url={draft.runbookUrl} />{/* v0.10.1341 */}
@@ -639,7 +643,7 @@ export default function AlertsPage() {
             {/* v0.10.519 — kural bazında ekip bildirimi: bu kural açılınca hangi
                 ekip(ler) mail alır; boş = sahip + SRE (Settings → Team routing). */}
             <div style={{ marginTop: 10 }}>
-              <Field label="Bildirim — ekipler (isteğe bağlı)">
+              <Field label={tn('alertsP.f.notify')}>
                 <NotifyTeamsField value={draft.notify} onChange={n => setDraft(d => ({ ...d, notify: n }))} />
               </Field>
             </div>
@@ -649,10 +653,10 @@ export default function AlertsPage() {
             <ConditionPreview draft={draft} />
             {editingId && (
               <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text3)' }}>
-                Editing <code>{editingId}</code>
+                {tfNodes(tn('alertsP.editing'), { id: <code>{editingId}</code> })}
                 {draft.builtIn && (
                   <span style={{ marginLeft: 6, color: 'var(--text2)' }}>
-                    (built-in — edits persist; preset values aren't restored on next boot)
+                    {tn('alertsP.editingBuiltIn')}
                   </span>
                 )}
               </div>
@@ -667,14 +671,14 @@ export default function AlertsPage() {
                   <Button variant="secondary" type="button" onClick={saveAsPreset}
                     disabled={!draft.metric}
                     title={isAdmin
-                      ? 'Save this draft as a reusable preset — admins can share with the team'
-                      : 'Save this draft as a personal preset'}>
-                    ★ Save as preset
+                      ? tn('alertsP.saveAsPreset.adminTitle')
+                      : tn('alertsP.saveAsPreset.title')}>
+                    {tn('alertsP.saveAsPreset')}
                   </Button>
                 )}
-                <Button variant="secondary" type="button" onClick={cancelForm}>Cancel</Button>
+                <Button variant="secondary" type="button" onClick={cancelForm}>{tn('alertsP.cancel')}</Button>
               </>}
-              confirm={<Button variant="primary" onClick={save}>{editingId ? 'Update rule' : 'Save rule'}</Button>} />
+              confirm={<Button variant="primary" onClick={save}>{editingId ? tn('alertsP.updateRule') : tn('alertsP.saveRule')}</Button>} />
           </div>
         )}
 
@@ -685,19 +689,19 @@ export default function AlertsPage() {
           <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
             {/* v0.10.1342 (K3 dilim B) — All | Metric | Watcher tek seçim →
                 SegmentedControl (eskiden seçili tür dolu birincildi). */}
-            <SegmentedControl size="sm" aria-label="Alert rule kind"
+            <SegmentedControl size="sm" aria-label={tn('alertsP.kind.aria')}
               value={ruleKind} onChange={setRuleKind}
               options={([
-                { key: 'all',     label: 'All',     count: rulesAll.length },
-                { key: 'metric',  label: 'Metric',  count: metricCount },
-                { key: 'watcher', label: 'Watcher', count: watcherCount },
+                { key: 'all',     label: tn('alertsP.kind.all'),     count: rulesAll.length },
+                { key: 'metric',  label: tn('alertsP.kind.metric'),  count: metricCount },
+                { key: 'watcher', label: tn('alertsP.kind.watcher'), count: watcherCount },
               ] as const).map(t => ({
                 value: t.key,
                 title: t.key === 'watcher'
-                  ? 'Saved log-search alerts (/logs Create watcher) + imported ES Watcher definitions'
+                  ? tn('alertsP.kind.watcherTitle')
                   : t.key === 'metric'
-                  ? 'Metric-threshold alerts (RPS / error rate / p99 / etc.)'
-                  : 'All alert rules',
+                  ? tn('alertsP.kind.metricTitle')
+                  : tn('alertsP.kind.allTitle'),
                 label: <>
                   {t.label}
                   <span style={{
@@ -714,7 +718,7 @@ export default function AlertsPage() {
         {rulesAll?.some(r => r.builtIn) && (
           <div data-builtin-off-note
             style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>
-            Yerleşik kurallar varsayılan kapalı (v0.10.1069); dilediğini açabilirsin.
+            {tn('alertsP.builtInOff')}
           </div>
         )}
         <div className="table-wrap">
@@ -744,28 +748,29 @@ export default function AlertsPage() {
                     <b>{r.name}</b>
                     {/* v0.10.519 — kuralın ekip hedefi (boş = sahip + SRE). */}
                     {r.notify?.teams?.length ? (
-                      <div className="mono" style={{ fontSize: 10, color: 'var(--text3)' }} title="Bu kural açılınca mail alacak ekipler (Settings → Team routing adresleri)">{notifySummary(r.notify)}</div>
+                      <div className="mono" style={{ fontSize: 10, color: 'var(--text3)' }} title={tn('alertsP.notifyTitle')}>{notifySummary(r.notify)}</div>
                     ) : null}
                   </td>
-                  <td className="mono">{isRoute ? r.target!.service : isTarget ? '— all callers —' : (r.service || (isWatcher || isEsWatcher ? '— logs —' : '— all —'))}</td>
+                  <td className="mono">{isRoute ? r.target!.service : isTarget ? tn('alertsP.cell.allCallers') : (r.service || (isWatcher || isEsWatcher ? tn('alertsP.cell.logs') : tn('alertsP.cell.all')))}</td>
                   <td className="mono" style={{ maxWidth: 380 }}>
                     {isRoute ? (
                       <>
+                        {/* i18n-exempt: hedef türü (http_route) */}
                         <span className="badge b-gray mono" style={{ fontSize: 10, marginRight: 6 }}>route</span>
                         <code className="mono cell-ellipsis" title={isRoute ? `${r.target!.service} ${r.target!.route}` : ''} style={{ maxWidth: 220, fontSize: 11, verticalAlign: 'middle' }}>{r.target!.route}</code>
                         <span style={{ color: 'var(--text3)', marginLeft: 6 }}>{r.metric.replace('http_route_', '').replace('_ms', '')} {r.comparator} {r.threshold} {httpRouteUnit(r.metric)}</span>
                       </>
-                    ) : isTarget ? (
+                    ) : isTarget ? ( // i18n-exempt: JSX üçlüsü, metin değil
                       <>
                         <span className="badge b-gray mono" style={{ fontSize: 10, marginRight: 6 }}>{r.target!.dbSystem || 'db'}{r.target!.dbName && r.target!.dbName !== 'default' ? ` · ${r.target!.dbName}` : ''}</span>
                         <code className="mono cell-ellipsis" title={r.target!.sample || r.target!.stmtHash} style={{ maxWidth: 220, fontSize: 11, verticalAlign: 'middle' }}>{r.target!.sample || `#${r.target!.stmtHash}`}</code>
                         <span style={{ color: 'var(--text3)', marginLeft: 6 }}>{r.metric.replace('db_stmt_', '').replace('_ms', '')} {r.comparator} {r.threshold} ms</span>
                       </>
-                    ) : isEsWatcher ? (
+                    ) : isEsWatcher ? ( // i18n-exempt: JSX üçlüsü, metin değil
                       <span title={r.watcherJson}>
                         hits.total {r.comparator} {r.threshold}
                       </span>
-                    ) : isWatcher ? (
+                    ) : isWatcher ? ( // i18n-exempt: JSX üçlüsü, metin değil
                       <>
                         <code title={r.logQuery}
                           style={{
@@ -775,7 +780,7 @@ export default function AlertsPage() {
                             padding: '1px 4px', borderRadius: 3,
                             background: 'var(--bg3)', fontSize: 11,
                           }}>
-                          {r.logQuery || '(empty)'}
+                          {r.logQuery || tn('alertsP.cell.empty')}
                         </code>
                         <span style={{ color: 'var(--text3)', marginLeft: 6 }}>
                           count {r.comparator} {r.threshold}
@@ -785,52 +790,52 @@ export default function AlertsPage() {
                       <>{r.metric} {r.comparator} {r.threshold}</>
                     )}
                   </td>
-                  <td>{r.windowSec / 60} min</td>
+                  <td>{tf('alertsP.cell.windowMin', lang, { n: r.windowSec / 60 })}</td>
                   <td><SeverityBadge s={r.severity} /></td>
                   <td>
                     {r.openProblems > 0
                       ? <Link className="badge b-err"
                           to={`/inbox?q=${encodeURIComponent(r.name)}`}
-                          title={`${r.openProblems} açık problem bu kuraldan — Inbox'ta aç`}
+                          title={tf('alertsP.cell.openTitle', lang, { count: r.openProblems, page: tn('nav.inbox') })}
                           style={{ textDecoration: 'none' }}>
-                          {r.openProblems} open
+                          {tf('alertsP.cell.open', lang, { count: r.openProblems })}
                         </Link>
                       : <span style={{ color: 'var(--text3)' }}>—</span>}
                   </td>
                   <td>{r.enabled
-                    ? <span className="badge b-gray">ON</span>
-                    : <span className="badge b-gray">OFF</span>}</td>
+                    ? <span className="badge b-gray">{tn('alertsP.cell.on')}</span>
+                    : <span className="badge b-gray">{tn('alertsP.cell.off')}</span>}</td>
                   <td>
                     {isEsWatcher
-                      ? <span className="badge b-info" title="Imported ES Watcher definition — evaluated against the log backend; the raw watch JSON is stored verbatim">ES WATCHER</span>
+                      ? <span className="badge b-info" title={tn('alertsP.type.esWatcherTitle')}>{tn('alertsP.type.esWatcher')}</span>
                       : isWatcher
-                      ? <span className="badge b-info" title="Saved log-search alert created via /logs Create watcher">WATCHER</span>
+                      ? <span className="badge b-info" title={tn('alertsP.type.watcherTitle')}>{tn('alertsP.type.watcher')}</span>
                       : r.builtIn
-                        ? <span className="badge b-info">BUILT-IN</span>
-                        : <span className="badge b-gray">metric</span>}
+                        ? <span className="badge b-info">{tn('alertsP.type.builtIn')}</span>
+                        : <span className="badge b-gray">{tn('alertsP.type.metric')}</span>}
                   </td>
                   <td><div className="cell-actions end">
                     {isWatcher && (
                       <Link className="sec"
                         to={logsHref({ window: null, q: r.logQuery || '' })}
-                        title="Open the saved log search in /logs"
+                        title={tn('alertsP.logsTitle')}
                         style={{ textDecoration: 'none' }}>
-                        ↗ logs
+                        {tn('alertsP.logs')}
                       </Link>
                     )}
                     {canEdit && (
                       <>
-                        <Button variant="secondary" size="sm" onClick={() => startEdit(r)}>Edit</Button>
+                        <Button variant="secondary" size="sm" onClick={() => startEdit(r)}>{tn('alertsP.edit')}</Button>
                         {r.enabled
                           ? <Button variant="secondary" size="sm" onClick={() => disable(r.id)}
-                              title="Silence the rule without removing its definition">
-                              Disable
+                              title={tn('alertsP.disableTitle')}>
+                              {tn('alertsP.disable')}
                             </Button>
-                          : <Button variant="secondary" size="sm" onClick={() => enable(r.id)}>Enable</Button>}
+                          : <Button variant="secondary" size="sm" onClick={() => enable(r.id)}>{tn('alertsP.enable')}</Button>}
                         <Button variant="ghost-danger" size="sm" loading={deleteRule.isPending}
                           onClick={() => void remove(r.id, r.name)}
-                          title="Remove the rule entirely from ClickHouse">
-                          Delete
+                          title={tn('alertsP.deleteTitle')}>
+                          {tn('alertsP.delete')}
                         </Button>
                       </>
                     )}
@@ -845,6 +850,14 @@ export default function AlertsPage() {
       </PageShell>
     </>
   );
+}
+
+// tfNodes — tf'nin JSX hâli: {ad} yer tutucularına düğüm (kalın ad / sayı) koyar.
+function tfNodes(tpl: string, vars: Record<string, React.ReactNode>): React.ReactNode[] {
+  return tpl.split(/(\{\w+\})/).map((part, i) => {
+    const m = /^\{(\w+)\}$/.exec(part);
+    return m && m[1] in vars ? <Fragment key={i}>{vars[m[1]]}</Fragment> : part;
+  });
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

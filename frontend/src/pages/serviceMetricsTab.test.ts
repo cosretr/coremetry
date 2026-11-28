@@ -13,7 +13,7 @@ const infra = readFileSync(join(__dirname, 'service/ServiceInfraTab.tsx'), 'utf8
 
 describe('Service Metrics sekmesi (v0.10.2436)', () => {
   it('etiket Metrics, anahtar details; ?tab=metrics de details', () => {
-    expect(svc).toContain("{ key: 'details',    label: 'Metrics' }");
+    expect(svc).toContain("{ key: 'details',    label: tn('tab.metrics') }"); // v0.10.2486 — ad katalogda (tab.metrics = Metrics / Metrikler)
     expect(svc).not.toContain("label: 'Details'");
     expect(svc).toContain("(tabParam === 'details' || tabParam === 'metrics') ? 'details'");
     expect(svc).toContain("(tabParam === 'infra' || tabParam === 'pods') ? 'infra'");

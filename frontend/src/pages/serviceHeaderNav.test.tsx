@@ -94,19 +94,21 @@ describe('v0.10.1320 — servis başlığı kaynağı', () => {
   });
 
   // v0.10.2481 — Anomalies çipi Problems › Sinyaller'e (/inbox?tab=signals) gider.
+  // v0.10.2486 dilim 2 — "Problems" düğmesi sayacın saydığı yere gider: /inbox?service=
+  // (önce /problems = Hatalar sayfası; audit §1.1 rota–etiket tersliği).
   it('drill sırası: Backtrace < Logs < Endpoints < Problems < Signals < Traces', () => {
-    const order = ['/service/backtrace', '/logs', '/endpoints', '/problems', '/inbox', '/traces']
-      .map(to => head.indexOf(`<DrillButton to="${to}"`));
+    const order = ['/service/backtrace"', '/logs"', '/endpoints"', '/inbox" params={{ service', "/inbox\" params={{ tab: 'signals'", '/traces"']
+      .map(to => head.indexOf(`<DrillButton to="${to}`));
     for (const i of order) expect(i).toBeGreaterThan(0);
     for (let k = 1; k < order.length; k++) expect(order[k]).toBeGreaterThan(order[k - 1]);
   });
 
   it('üç bitişik ButtonGroup (role=group); Traces son grupta tek başına', () => {
-    const groups = [...head.matchAll(/<ButtonGroup attached aria-label="([^"]+)">([\s\S]*?)<\/ButtonGroup>/g)];
-    expect(groups.map(g => g[1])).toEqual(['Bağımlılık ve sinyaller', 'Sağlık', 'Traces']);
+    const groups = [...head.matchAll(/<ButtonGroup attached aria-label=\{tn\('([^']+)'\)\}>([\s\S]*?)<\/ButtonGroup>/g)];
+    expect(groups.map(g => g[1])).toEqual(['svc.drill.groupDeps', 'svc.drill.groupHealth', 'nav.traces']); // v0.10.2486 — adlar katalogda
     const drillsIn = (s: string) => [...s.matchAll(/<DrillButton to="([^"]+)"/g)].map(m => m[1]);
     expect(drillsIn(groups[0][2])).toEqual(['/service/backtrace', '/logs', '/endpoints']);
-    expect(drillsIn(groups[1][2])).toEqual(['/problems', '/inbox']);
+    expect(drillsIn(groups[1][2])).toEqual(['/inbox', '/inbox']);
     expect(drillsIn(groups[2][2])).toEqual(['/traces']);
     // primitiveClasses: taban sınıf ui/ dışında elle yazılmaz.
     expect(page).not.toContain('className="btn-group');
@@ -123,7 +125,7 @@ describe('v0.10.1320 — servis başlığı kaynağı', () => {
     for (const to of ['/traces', '/logs', '/endpoints']) {
       expect(head).toContain(`<DrillButton to="${to}" params={{ service: svc }} range={range} carry={SERVICE_PIVOT_CARRY}`);
     }
-    expect(head).toMatch(/<DrillButton to="\/problems" params=\{\{ service: svc \}\} variant="subtle"/);
+    expect(head).toMatch(/<DrillButton to="\/inbox" params=\{\{ service: svc \}\} variant="subtle"/);
     expect(head).toContain(`<DrillButton to="/inbox" params={{ tab: 'signals', service: svc }} variant="subtle"`);
   });
 

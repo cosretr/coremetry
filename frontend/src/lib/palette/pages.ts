@@ -47,19 +47,20 @@ export type PaletteResult = {
 // yüzeyi burasıdır.
 export const PAGES: PaletteResult[] = [
   // Triage
-  { kind: 'page', label: 'Inbox',       navKey: 'nav.inbox', aliases: ['inbox'], hint: 'Unified triage queue', to: '/inbox' },
+  // v0.10.2486 dilim 2 — etiket nav.* (menüyle tek ad); eski adlar alias olarak aranabilir.
+  { kind: 'page', label: 'Problems',    navKey: 'nav.inbox', aliases: ['inbox', 'problems', 'problemler', 'sorunlar'], hint: 'Unified triage queue', to: '/inbox' },
   { kind: 'page', label: 'Incidents',   navKey: 'nav.incidents', hint: 'Manual incident log', to: '/incidents' },
-  { kind: 'page', label: 'Problems',    navKey: 'nav.problems', aliases: ['problems'], hint: 'Open alert + exception inbox', to: '/problems' },
+  { kind: 'page', label: 'Errors',      navKey: 'nav.problems', aliases: ['exceptions', 'errors', 'hatalar'], hint: 'Exception groups', to: '/problems' },
   // v0.10.2481 — Anomalies listesi Problems › Sinyaller sekmesi; "anomal…" araması da bulur.
   { kind: 'page', label: 'Signals',     navKey: 'inbox.tab.signals', aliases: ['anomalies', 'anomaliler', 'signals'], hint: 'Problems › Signals: anomalies not attached to a Problem', to: '/inbox?tab=signals' },
   // v0.10.201 — Inbox/Incidents/Problems/Anomalies'in navKey'siz KOPYA bloğu silindi
   // (⌘K aynı dört sayfayı iki kez listeliyordu, dedup yok); Deployment Report → Rollouts.
   // v0.10.984 (Rollouts v2 P2.3) — sayfa adı «Deployment/Rollouts»; "deployments" araması da bulur.
-  { kind: 'page', label: 'Deployment/Rollouts', navKey: 'nav.rollouts', aliases: ['deploy', 'deployments', 'deployment report', 'rollout', 'rollouts'], hint: 'Live workload rollouts + deploy stats', to: '/rollouts' },
+  { kind: 'page', label: 'Changes', navKey: 'nav.rollouts', aliases: ['deploy', 'deployments', 'deployment report', 'rollout', 'rollouts', 'changes', 'değişiklikler'], hint: 'Live workload rollouts + deploy stats', to: '/rollouts' },
   // Services
   { kind: 'page', label: 'Services',    navKey: 'nav.services', hint: 'Per-service RED + latency', to: '/services' },
   { kind: 'page', label: 'Endpoints',   navKey: 'nav.endpoints', hint: 'Per-route RED', to: '/endpoints' },
-  { kind: 'page', label: 'Service Map', navKey: 'nav.topology', aliases: ['service map', 'topology'], hint: 'Topology / flows', to: '/service-map' },
+  { kind: 'page', label: 'Topology',    navKey: 'nav.topology', aliases: ['service map', 'topology'], hint: 'Topology / flows', to: '/service-map' },
   { kind: 'page', label: 'Databases',   navKey: 'nav.databases', hint: 'DBM-style query catalog', to: '/databases' },
   { kind: 'page', label: 'Messaging',   navKey: 'nav.messaging', hint: 'Kafka / RabbitMQ / SQS', to: '/messaging' },
   { kind: 'page', label: 'External',    navKey: 'nav.external', hint: 'Third-party dependencies', to: '/external' },
@@ -69,7 +70,7 @@ export const PAGES: PaletteResult[] = [
   { kind: 'page', label: 'Metrics',     navKey: 'nav.metrics', hint: 'Time-series explorer', to: '/metrics' },
   { kind: 'page', label: 'Logs',        navKey: 'nav.logs', hint: 'Elasticsearch logs', to: '/logs' },
   { kind: 'page', label: 'Profiling',   navKey: 'nav.profiling', hint: 'Continuous profiling', to: '/profiling' },
-  { kind: 'page', label: 'Trace compare', hint: 'Diff two traces', to: '/trace/compare' },
+  { kind: 'page', label: 'Trace compare', navKey: 'page.traceCompare', hint: 'Diff two traces', to: '/trace/compare' },
   // Workspaces
   { kind: 'page', label: 'Explore',     navKey: 'nav.explore', hint: 'Cross-signal ad-hoc query', to: '/explore' },
   // v0.10.1335 — birleşik arama sayfası (GET /api/search).
@@ -77,17 +78,17 @@ export const PAGES: PaletteResult[] = [
   { kind: 'page', label: 'Runbooks',    navKey: 'nav.runbooks', hint: 'Operational procedures', to: '/runbooks' },
   { kind: 'page', label: 'Dashboards',  navKey: 'nav.dashboards', hint: 'Operator-curated', to: '/dashboards' },
   // Alerting
-  { kind: 'page', label: 'Alerts',      navKey: 'nav.alerts', hint: 'Alert rules + noisy report', to: '/alerts' },
-  { kind: 'page', label: 'SLOs',        hint: 'Service level objectives', to: '/slos' },
-  { kind: 'page', label: 'Monitors',    hint: 'Synthetic probes', to: '/monitors' },
-  { kind: 'page', label: 'Events',      hint: 'Deploy / config markers', to: '/events' },
+  { kind: 'page', label: 'Rules',       navKey: 'nav.alerts', aliases: ['alerts', 'alarmlar', 'alert rules'], hint: 'Alert rules + noisy report', to: '/alerts' },
+  { kind: 'page', label: 'SLOs',        navKey: 'nav.slos', hint: 'Service level objectives', to: '/slos' },
+  { kind: 'page', label: 'Monitors',    navKey: 'nav.monitors', hint: 'Synthetic probes', to: '/monitors' },
+  { kind: 'page', label: 'Events',      navKey: 'nav.events', aliases: ['events', 'olaylar'], hint: 'Deploy / config markers', to: '/events' },
   // v0.9.952 (UX denetimi F1 / Ö17) — üç CANLI rota katalogda YOKTU:
   // /deploys, /clusters, /watchers. Son ikisi sidebar'da GÖRÜNÜR ama
   // palette'te aranamıyordu; klavyeyle gezinen operatör için "yok"
   // demekle aynı şey. (Üçüncüsü /deploys idi — v0.10.209'da sayfa
   // emekli edildi, rota /rollouts'a yönlendirir; ⌘K girdisi de gitti.)
   { kind: 'page', label: 'Clusters',    navKey: 'nav.clusters', hint: 'Kubernetes / OpenShift inventory', to: '/clusters' },
-  { kind: 'page', label: 'Watchers',    hint: 'Log pattern watchers', to: '/watchers' },
+  { kind: 'page', label: 'Watchers',    navKey: 'nav.watchers', hint: 'Log pattern watchers', to: '/watchers' },
   // System (v0.8.9 — /admin/* → /system/:tab)
   { kind: 'page', label: 'System · Overview', adminOnly: true,      hint: 'Internal CH + cache stats', to: '/system/stats' },
   { kind: 'page', label: 'System · ClickHouse', adminOnly: true,    hint: 'CH health + mutations', to: '/system/clickhouse' },

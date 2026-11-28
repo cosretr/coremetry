@@ -23,7 +23,7 @@ import type { RangeParams, ServicesPageOpts } from '@/lib/api';
 import type { ServiceRedMetricRow, ServiceRedSparkRow, ServicesMetricRankPage } from '@/lib/types';
 import { servicesSortScope, servicesSortNote, resortByDisplayed, servicesAggregate, rowSpark, aggregateSpark, METRIC_SORT_COLS } from '@/lib/servicesMetricRed';
 import type { ServicesRankInfo, ServicesSortNote } from '@/lib/servicesMetricRed';
-import { t, tf, useLang } from '@/lib/i18n';
+import { t, tf, useLang, useT } from '@/lib/i18n';
 import { fmtNum, fmtFixed, timeRangeToNs, rowClickHandlers, tsLong, fmtAgoNs } from '@/lib/utils';
 import { teamOptionsCI } from '@/lib/teamOptions';
 import { encodeRange, encodeFilters, buildQuery } from '@/lib/urlState';
@@ -47,6 +47,7 @@ import { Pager } from '@/components/Pager';
 // lib/servicesTable.ts so the node vitest harness pins them.
 
 export default function ServicesPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const navigate = useNavigate();
   const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   // Global env filter (v0.8.385, env-separation Phase 2) — written by
@@ -610,7 +611,7 @@ export default function ServicesPage() {
 
   return (
     <>
-      <Topbar title="Services" range={range} onRangeChange={setRange} envApplies sampling="services" />
+      <Topbar title={tn('nav.services')} range={range} onRangeChange={setRange} envApplies sampling="services" />
       <PageShell>
         {data != null && (
           <PageControls sticky>

@@ -4,11 +4,17 @@
 // `initialOpen` test dikişiyle (statik render tıklayamaz): 12 çağrıda ilk 5
 // satır + «7 daha», hatalı satırda ToolErrorJSON sınıfı/ipucu + tekrar rozeti,
 // etiket adımı (tool yok) SAYILMAZ, süre bilinmiyorsa «—», kırpık rozeti.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router';
 import { ChatBubble, ChatBubbleSlotsContext, ToolStepsPanel } from './ChatBubble';
 import type { ChatTurn, ChatStepDetail } from '@/lib/types';
+// v0.10.2486 dilim 2 — metinler katalogda; bu test Türkçe arayüzü pinler (SSR: window yok,
+// kullanıcı dil tercihi okunamaz — useLang sabitlenir).
+vi.mock('@/lib/i18n', async (orig) => {
+  const m = await orig<typeof import('@/lib/i18n')>();
+  return { ...m, useLang: () => 'tr' as const, currentLang: () => 'tr' as const, useT: () => (k: string) => m.t(k, 'tr') };
+});
 
 // v0.10.1137 — adımlar "Nasıl cevapladım" açılırında; statik render tıklayamaz → `stepsOpen` dikişi.
 function html(turn: ChatTurn): string {

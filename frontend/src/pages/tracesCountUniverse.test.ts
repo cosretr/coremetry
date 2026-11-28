@@ -26,9 +26,9 @@ describe('/traces sayımı listeyle aynı evren', () => {
   });
   it('liste bitmişse (hasMore=false) kesin toplam listeden; sayılamıyor metni yalnız devam eden listede', () => {
     expect(src).toContain("{countRes?.reason && !hasMore ? (");
-    expect(src).toContain('{(page * 50 + traces.length).toLocaleString()} total');
+    expect(src).toContain("{tf('tracesP.count.total', lang, { n: (page * 50 + traces.length).toLocaleString() })}"); // v0.10.2486 — katalogda
     // v0.10.2314 — metin katalogda (trc.count.noTotal); TR değeri aynen.
-    expect(src).toContain("showing {traces.length}{hasMore ? '+' : ''}{tl('trc.count.noTotal', lang)}");
+    expect(src).toContain("{tf('tracesP.count.showing', lang, { n: `${traces.length}${hasMore ? '+' : ''}` })}{tl('trc.count.noTotal', lang)}"); // v0.10.2486 — "showing N" katalogda
     expect(cat).toContain("'trc.count.noTotal': ' · toplam sayılamıyor',");
   });
 });

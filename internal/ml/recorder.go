@@ -124,6 +124,9 @@ type Recorder struct {
 	// chronic — v0.10.2480: kronik kaydın (stage=chronic, koşu izlenmez)
 	// replay durumu, epizot başına (snapshot.go chronicSnapState).
 	chronic map[string]*chronicSnap
+	// precision — v0.10.2486 (precision_shadow.go): günlük gölge kuralı
+	// değerlendirmesinin koşu bayrağı (aynı lider kilidi).
+	precision precisionJob
 }
 
 // WithNotifier — v0.10.2052: grup Problem'i bildirimi için mevcut Problem
@@ -423,17 +426,20 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 	// (publish_gate_enforce.go). pubWarming: karar haritası bu tik kuruldu →
 	// bu tik Problem kapatılmaz.
 	pub, pubWarming := r.publishVerdicts(start, gateMode)
+	// v0.10.2486 (precision B.2): `on` kipinde gölgedeki dedektörler; shadow /
+	// off kipinde nil (blob okunmaz, kapı girdisi v0.10.2485 ile aynı).
+	demoted := r.precisionDemoted(tctx, cfg)
 	runEvs := r.runs.events()
 	lagHist := r.lagHistory(tctx, cfg, append(append([]chstore.MLEvent(nil), kept...), runEvs...)) // v0.10.2476
 	groups, shadow := decideGroups(kept, runEvs, GroupSlack(cfg),
 		// v0.10.2476 — Problem kararı olayı ≥ 15 dk önce bitmiş koşuyu açık saymaz
 		// (problem_end.go: no-data tutması Problem'i 3 sa açık tutuyordu).
-		GroupGateInput{IsBatch: isBatch, LoadParts: loadParts, Open: problemOpenIDs(r.runs.openIDs(kept), runEvs, kept, start), Published: pub, LagHistory: lagHist}, start)
+		GroupGateInput{IsBatch: isBatch, LoadParts: loadParts, Open: problemOpenIDs(r.runs.openIDs(kept), runEvs, kept, start), Published: pub, LagHistory: lagHist, Demoted: demoted}, start)
 	// v0.10.2089 — servis düzeyi kapı (spec dilim 3): karar kanıta, sayaç
 	// tik durumuna. v0.10.2130 (dilim 4, operatör kararı 2026-11-14) — aynı
 	// karar canlı yola girer: grup kararlarıyla TEK planda, servis başına tek
 	// ML Problem'i (anahtar kapalıyken yalnız gölge kaydı).
-	svcDec := decideSvcShadow(publishedCandidates(kept, pub), r.runs.openIDs(kept), groups, chstore.CurrentProblemPriority(), start)
+	svcDec := decideSvcShadow(demotedOut(publishedCandidates(kept, pub), demoted), r.runs.openIDs(kept), groups, chstore.CurrentProblemPriority(), start)
 	var live liveCounts
 	if cfg.GroupProblemsOn() {
 		loc := OperatorLocation(sens)
@@ -454,6 +460,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 	}
 	stampGroupDecisions(kept, groups)
 	stampSvcShadow(kept, svcDec)
+	stampDetShadow(kept, demoted, start)  // v0.10.2486: yalnız on kipinde dolu
 	r.markGateLinks(tctx, groups, svcDec) // v0.10.2343: K16 raporu (yalnız bellek + memo'lu anlık görüntü)
 	svcOpen, svcP1 := svcShadowCounts(svcDec)
 	confirmWin := time.Duration(cfg.Quality.ConfirmWindowMin) * time.Minute
@@ -583,6 +590,9 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 		log.Printf("[ml] tik durumu yazılamadı: %v", serr)
 	}
 	scancel()
+	if !early { // v0.10.2486 (precision B.2): günde bir, arka planda (idempotent)
+		r.maybePrecisionDaily(ctx, cfg, start)
+	}
 	log.Printf("[ml] tick placement=%s early=%v detectors=%d events=%d suppressed=impact:%d,regime:%d,batch:%d dur=%dms es_p95=%dms err=%v",
 		r.placement, early, active, written, sup.Impact, sup.Regime, batchCut, time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
 	log.Printf("[ml] tick group_problems live=%v opened=%d refreshed=%d resolved=%d", cfg.GroupProblemsOn(), live.Opened, live.Refreshed, live.Resolved)

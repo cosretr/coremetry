@@ -99,7 +99,7 @@ describe('M8 — dönüştürülen yüzeyler', () => {
     expect(read('pages/Services.tsx')).toMatch(/<ServicePicker[\s\S]{0,300}?Filter services/);
     const traces = read('pages/Traces.tsx');
     expect(traces).not.toMatch(/trace-lookup/);
-    expect(traces).toMatch(/<OperationPicker[\s\S]{0,400}?function_id \/ trace ID/);
+    expect(traces).toMatch(/<OperationPicker[\s\S]{0,400}?placeholder=\{tl\('tracesP\.f\.op', lang\)\}/); // v0.10.2486 — yer tutucu katalogda ("…function_id / trace ID…")
     expect(Object.keys(DELIBERATELY_OUT)).toHaveLength(2);
   });
 

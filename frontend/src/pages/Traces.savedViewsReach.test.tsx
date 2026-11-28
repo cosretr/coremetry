@@ -179,7 +179,7 @@ describe('/traces — kayıtlı görünümler tek "Saved ▾" menüsünde (v0.10
     // Reset ve CSV aynı başlık kümesinde, seçiciden SONRA
     const header = statGroup()!.parentElement!;
     expect(header.contains(sb!)).toBe(true);
-    expect([...header.querySelectorAll('button')].some(b => b.textContent === 'Reset')).toBe(true);
+    expect([...header.querySelectorAll('button')].some(b => b.textContent === 'Sıfırla')).toBe(true);
     expect(header.querySelector('a[href^="/api/traces/export.csv?"]')).not.toBeNull();
   });
 
@@ -222,7 +222,7 @@ describe('/traces — kayıtlı görünümler tek "Saved ▾" menüsünde (v0.10
     await mountTraces('/traces?view=aggregate');
     expect(statGroup()).toBeNull();
     expect(savedBtn()).toBeTruthy();
-    expect(buttons().some(b => b.textContent === 'Reset')).toBe(true);
+    expect(buttons().some(b => b.textContent === 'Sıfırla')).toBe(true);
     expect(document.querySelector('a[href^="/api/traces/export.csv?"]')).not.toBeNull();
     expect(document.body.textContent).not.toContain('Saved:');
   });

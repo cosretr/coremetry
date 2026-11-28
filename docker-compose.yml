@@ -395,6 +395,12 @@ services:
     container_name: coremetry-go-demo
     entrypoint: ["./demo"]
     command: ["-endpoint", "http://otel-collector:4318", "-rps", "3"]
+    # v0.10.2486 — Kubernetes metrik simülatörü (yalnız yerel; boş = kapalı).
+    # VictoriaMetrics'i olan yerel override'da http://victoriametrics:8428
+    # verilir; ardından scripts/demo-k8s-clusters.sh (docs/DEMO-REALISM.md).
+    environment:
+      DEMO_K8S_METRICS_URL: "${DEMO_K8S_METRICS_URL:-}"
+      DEMO_K8S_INCIDENT_EVERY: "${DEMO_K8S_INCIDENT_EVERY:-75m}"
     depends_on:
       - otel-collector
     restart: unless-stopped

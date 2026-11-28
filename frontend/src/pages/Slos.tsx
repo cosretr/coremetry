@@ -16,6 +16,7 @@ import type { SLIType, SLORow } from '@/lib/types';
 import { PageControls } from '@/components/coremetry/PageControls';
 import { readState } from '@/lib/readState';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { useT } from '@/lib/i18n';
 import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 
 // v0.6.44 — sortable columns on /slos. Forecast + 7d trend stay
@@ -29,6 +30,7 @@ import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 —
 const SLO_ACTIONS_COL: ColumnDef<SLORow> = { id: 'actions', label: 'Actions', kind: 'actions', width: 130 };
 
 export default function SLOsPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const confirm = useConfirm();
   const { user } = useAuth();
   const [showNew, setShowNew] = useState(false);
@@ -89,7 +91,7 @@ export default function SLOsPage() {
 
   return (
     <>
-      <Topbar title="SLOs" />
+      <Topbar title={tn('nav.slos')} />
       <PageShell>
         {/* v0.10.1319 K1 — eylemler sağ kümede, md boy (eski size="sm" +
             satır-içi marginLeft kalktı; hizayı `.pc-actions` veriyor). */}

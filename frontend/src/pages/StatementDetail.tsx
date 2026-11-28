@@ -45,6 +45,7 @@ import { useT } from '@/lib/i18n';
 // the same statement class. Only the DESTINATION moved; the identity
 // grammar did not.
 export default function StatementDetailPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const tr = useT();
   const [params, setParams] = useSearchParams();
   const search = params.toString();
@@ -80,7 +81,7 @@ export default function StatementDetailPage() {
   if (!refObj) {
     return (
       <>
-        <Topbar title="Statement" />
+        <Topbar title={tn('page.statement')} />
         <PageShell>
           <Empty icon="⚠" title="No statement in this link">
             The URL is missing a valid <code>stmt</code> identity.
@@ -96,7 +97,7 @@ export default function StatementDetailPage() {
 
   return (
     <>
-      <Topbar title="Statement" range={range} onRangeChange={setRange} />
+      <Topbar title={tn('page.statement')} range={range} onRangeChange={setRange} />
       <PageShell>
         {/* Geri/kırıntı linkleri pencereyi ve env'i TAŞIR (v0.9.1320
             kuralı): bir geri linkinin bağlamı değiştirmesi, geri linki

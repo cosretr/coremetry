@@ -71,11 +71,11 @@ describe('Trace dış link kimliği (v0.10.566)', () => {
   });
 
   it('pasif düğme davranışı korunuyor: eksikleri sayar, tooltip söyler', () => {
-    expect(src).toContain('bu trace\'te çözülemeyen alanlar — ${missing.join(\', \')}');
+    expect(src).toContain("t('traceD.ext.missingTip').replace('{label}', l.label).replace('{fields}', missing.join(', '))"); // v0.10.2486 — katalogda
     expect(src).toContain('disabled');
     // Kimliğin kaynağı (log gövdesi / span attribute) tooltip'e ekleniyor.
-    expect(src).toContain('kimlik: ');
-    expect(src).toContain("ident.source === 'log' ? 'log gövdesi'");
+    expect(src).toContain("t('traceD.ext.srcNote')") // v0.10.2486 — katalogda;
+    expect(src).toContain("ident.source === 'log' ? t('traceD.ext.srcLog')");
     expect(src).toContain('ident.note');
   });
 });

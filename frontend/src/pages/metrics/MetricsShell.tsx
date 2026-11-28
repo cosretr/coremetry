@@ -26,6 +26,7 @@ import { decodeMx, defaultMxModel, encodeMx, MX_PARAM, type MxModel } from '@/li
 import { applyMxImport, importLegacyMetricsUrl } from '@/lib/metricsExplorer/legacy';
 import { QueryTab } from './QueryTab';
 import { DiscoverTab } from './DiscoverTab';
+import { useT } from '@/lib/i18n';
 
 const CTX_DIMS: ContextDim[] = ['range', 'cluster'];
 const CTX_HIDDEN: ContextDim[] = ['service', 'namespace', 'compare'];
@@ -36,6 +37,7 @@ function canEditRole(role: string | undefined): boolean {
 }
 
 export function MetricsShell() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const [sp, setSearchParams] = useSearchParams();
   const ctx = useContextParams({ defaultPreset: DEFAULT_RANGE_PRESET, applies: CTX_DIMS });
   const canEdit = canEditRole(useAuthRole());
@@ -72,7 +74,7 @@ export function MetricsShell() {
 
   return (
     <>
-      <Topbar title="Metrics" context={{ ctx, hidden: CTX_HIDDEN }} />
+      <Topbar title={tn('nav.metrics')} context={{ ctx, hidden: CTX_HIDDEN }} />
       <PageShell>
         <Tabs value={tab} onValueChange={setTab} className="gap-3">
           <TabsList variant="line" aria-label="Metrics bölümleri">

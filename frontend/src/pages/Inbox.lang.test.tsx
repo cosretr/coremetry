@@ -141,7 +141,7 @@ describe('Problems listesi — İngilizce arayüz (v0.10.2283)', () => {
       '⚠ The filter ran over the scanned candidates — the queue may be larger than this',
       '⚠ Showing the first 3 of 43 items — cut by priority order',
       'VM · not sampled', '5 h 40 min · ongoing · episode 3', '3 events', '42 occurrences', '3 services', '2 teams', 'unowned',
-      'Alert', '1 selected', '1 can be acknowledged', 'Acknowledge (1)', 'Real problem (0)', 'Not a problem (0)', 'Close (1)',
+      'Rule', '1 selected', '1 can be acknowledged', 'Acknowledge (1)', 'Real problem (0)', 'Not a problem (0)', 'Close (1)',
       'Delete permanently (1)', 'Clear selection', 'Closed', 'Ignored', 'Open', 'All', 'Manage alert rules',
     ]) expect(r.text, en).toContain(en);
     expect(r.text).toMatch(/since \d{2}[.:]\d{2}/);

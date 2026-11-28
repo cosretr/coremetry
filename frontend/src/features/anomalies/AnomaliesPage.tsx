@@ -138,6 +138,7 @@ function excEmptyMessage(tab: string, lang: Lang = 'tr'): string {
 // v0.10.1232 — exception listesinin URL sözleşmesi (useUrlParams).
 const EXC_URL_SPEC = { q: strParam(), exception: csvParam(), page: intParam(0) };
 export default function ProblemsPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'editor';
   // URL is the source of truth for tab + service + page so a
@@ -583,7 +584,7 @@ export default function ProblemsPage() {
   if (detail) {
     return (
       <>
-        <Topbar title="Exceptions" showEnv envApplies />
+        <Topbar title={tn('nav.problems')} showEnv envApplies />
         <ProblemDetail
           group={detail}
           isAdmin={isAdmin}
@@ -599,11 +600,11 @@ export default function ProblemsPage() {
   if (excParam && excNotFound) {
     return (
       <>
-        <Topbar title="Exceptions" showEnv envApplies />
+        <Topbar title={tn('nav.problems')} showEnv envApplies />
         <PageShell>
           <Empty icon="❓" title="Exception not found">
             {tl('exc.notFound', lang)}{' '}
-            <Button variant="secondary" size="sm" onClick={closeExcDetail}>← Exceptions</Button>
+            <Button variant="secondary" size="sm" onClick={closeExcDetail}>← {tn('nav.problems')}</Button>
           </Empty>
         </PageShell>
       </>
@@ -612,7 +613,7 @@ export default function ProblemsPage() {
   if (excParam && !excNotFound) {
     return (
       <>
-        <Topbar title="Exceptions" showEnv envApplies />
+        <Topbar title={tn('nav.problems')} showEnv envApplies />
         <PageShell><Spinner /></PageShell>
       </>
     );
@@ -628,7 +629,7 @@ export default function ProblemsPage() {
     <>
       {/* v0.9.323 — this list is exception GROUPS; "Problems" now names the
           merged triage queue at /inbox. Same page, same route, honest label. */}
-      {!problemParam && <Topbar title="Exceptions" showEnv envApplies />}
+      {!problemParam && <Topbar title={tn('nav.problems')} showEnv envApplies />}
       {/* Hidden (NOT unmounted) while the full-page detail is open — facet /
           team / bulk-selection state survives "← Exceptions" / Esc.
           v0.9.981 (D3.1) — kap artık `id="content"` YERİNE `.page-body`.
@@ -912,13 +913,14 @@ export default function ProblemsPage() {
           {/* Singular: this is ONE problem, reached from a notification deep
               link. Plural "Problems" is the merged queue (v0.9.323). v0.10.2170
               — Topbar host'tan buraya taşındı (görünüm aynı). */}
-          <Topbar title="Problem" showEnv envApplies />
+          <Topbar title={tn('page.problem')} showEnv envApplies />
           {/* v0.10.1032 (inceleme) — kimlikle anahtarlı: A'dan B'ye geçişte
               açılır bölümlerin ve triyajın meşgul/hata durumu taşınmaz. */}
           <AlertProblemHost
             key={problemParam}
             id={problemParam}
             isAdmin={isAdmin}
+            backLabel={`← ${tn('nav.problems')}`}
             onBack={() => setSearchParams(prev => withProblemParam(prev, null), { replace: true })}
           />
         </>

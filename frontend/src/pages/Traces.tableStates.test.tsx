@@ -164,9 +164,9 @@ describe('/traces liste durumları tablonun içinde (v0.10.967)', () => {
     const r = stateRow(listTable());
     expect(r?.dataset.dtState).toBe('empty');
     expect(r?.textContent).toContain('Trace bulunamadı');
-    expect(r?.querySelector('a[href="/system/stats"]')?.textContent).toBe('system stats');
+    expect(r?.querySelector('a[href="/system/stats"]')?.textContent).toBe('sistem istatistikleri') // v0.10.2486 — katalogda (TR arayüz);
     expect([...(r?.querySelectorAll('a') ?? [])].some(a => a.textContent?.includes('Teşhis (explain)'))).toBe(true);
-    expect(r?.textContent).toContain('nothing in this window matches search + filters');
+    expect(r?.textContent).toContain('bu pencerede arama + filtrelerle eşleşen hiçbir şey yok') // v0.10.2486 — katalogda (TR arayüz);
     expect(host!.querySelector('.pager')).toBeNull();
   });
 
@@ -251,6 +251,6 @@ describe('/traces toplu görünüm durumları tablonun içinde (v0.10.967)', () 
   it('satır varken durum satırı yok, sayı satırı var', async () => {
     await mountTraces('/traces?view=aggregate');
     expect(stateRow(aggTable())).toBeNull();
-    expect(host!.textContent).toContain('click a row to drill down');
+    expect(host!.textContent).toContain('detay için bir satıra tıkla'); // v0.10.2486 — katalogda (TR arayüz)
   });
 });

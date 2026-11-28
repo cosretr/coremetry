@@ -52,7 +52,7 @@ describe('BAĞLANMA (kaynak pinleri)', () => {
   it('balon onRetry varken "↺ Yeniden dene" düğmesi çizer', () => {
     const b = src('./ChatBubble.tsx');
     expect(b).toContain('onRetry?: () => void');
-    expect(b).toContain('↺ Yeniden dene');
+    expect(b).toContain("t('chatB.retryBtn', lang)"); // v0.10.2486 — '↺ Yeniden dene' katalogda
   });
 });
 

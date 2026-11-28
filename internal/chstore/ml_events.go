@@ -236,6 +236,10 @@ type MLEventsFilter struct {
 	// (MLConfig.PublishGatesMode) api doldurur; false = SQL süzgeçsiz. ID
 	// okuması ve held görünümü etkilenmez (tutulan olay erişilebilir kalır).
 	HideHeld bool
+	// DetShadow — v0.10.2486 (precision B.2): held görünümü otomatik gölge
+	// kuralının gölgedeki dedektör olaylarını da (kanıtta detShadow) okur.
+	// Yalnız kural `on` kipindeyken api doldurur; false = v0.10.2485 SQL'i.
+	DetShadow bool
 	// recCols — ListMLEvents doldurur (hasMLRecordCols); kolon yoksa sınıf
 	// süzgeci yalnız dedektör adına düşer.
 	recCols bool
@@ -372,11 +376,14 @@ func mlEventsWhere(f MLEventsFilter) (string, []any) {
 		where = append(where, mlHeldCond(f)...)
 	case MLViewHeld:
 		// v0.10.2476: doğrulayıcıdan kalan (invalid) kayıt da Elenenler'de.
+		held := "0"
 		if f.recCols {
-			where = append(where, `record != '' AND (publish_state = 'invalid' OR position(record, '"passed":false') > 0)`)
-		} else {
-			where = append(where, "0")
+			held = `record != '' AND (publish_state = 'invalid' OR position(record, '"passed":false') > 0)`
 		}
+		if f.DetShadow { // v0.10.2486: "dedektör gölgede (karne)"
+			held = "((" + held + `) OR position(evidence, '"detShadow"') > 0)`
+		}
+		where = append(where, held)
 	}
 	return strings.Join(where, " AND "), args
 }
@@ -498,6 +505,7 @@ type MLDetectorScore struct {
 	Queue             MLQueueCounts       `json:"queue"`          // haftalık kuyruk etiketleri
 	MedianLabelSec    float64             `json:"medianLabelSec"` // olay başı → oy (A1b)
 	Labellers         int64               `json:"labellers"`      // farklı etiketleyen (A1b)
+	LabelDays         int64               `json:"labelDays"`      // v0.10.2486: kurala girebilen etiketlerin farklı gün sayısı (B.2 ≥ 5 gün)
 	WorstSvc          string              `json:"worstSvc,omitempty"`
 	WorstSvcShare     float64             `json:"worstSvcShare"`   // yanlışların en kötü servisteki payı (A1c)
 	LinkedShortAuto   int64               `json:"linkedShortAuto"` // bağlı Problem'i < 15 dk'da kendiliğinden kapanan olay

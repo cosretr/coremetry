@@ -54,6 +54,8 @@ import { measuredSeriesFirst, recordUsable } from './mlRecord';
 import { fmtPctLang, t as tl, tf, useLang, useT, type Lang } from '@/lib/i18n'; // v0.10.2291 — sayfa kromu arayüz dilinde (sunucu metni aynen)
 import { contributorLine, leadFromSnapshot, panelPeakLine, parseLogsLink, recordLead, snapNoneKey, type Contributors } from './mlSourcePanel';
 import { MLRecordChart } from './MLRecordChart';
+import { useMLScorecard } from '@/lib/queries/ml';
+import { voteNoteKey } from './mlPrecisionShadow';
 import { requestsCapable } from './mlRequests';
 import { evidenceRows, evidenceSub } from './mlEvidenceRows';
 import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2302 — EN arayüzde sunucu cümlesi işaretli
@@ -356,6 +358,8 @@ function MLEventActions({ id, card, verdict, localized = false }: { id: string; 
   const lang = useLang();
   // v0.10.2291 — eski kart Türkçe arayüzde bugünkü metni korur; İngilizcede katalog.
   const L = (key: string, fallback: string) => (localized || lang !== 'tr' ? tr(key) : fallback);
+  // v0.10.2486 — gölge kuralı kipi (karne zarfı; 60 sn önbellek). off / shadow: not aynen.
+  const precisionMode = useMLScorecard().data?.precisionShadow?.mode;
   const qc = useQueryClient();
   const role = useAuthRole();
   const canWrite = role === 'admin' || role === 'editor';
@@ -387,7 +391,9 @@ function MLEventActions({ id, card, verdict, localized = false }: { id: string; 
         <Button size="sm" variant="outline" disabled={busy || !canWrite} title={why} aria-expanded={localized ? asking : undefined}
           onClick={() => { if (localized) setAsking(a => !a); else void put('not_anomaly'); }}>{L('mlRecord.vote.notIssue', 'Sorun değil')}</Button>
         {verdict && <Badge variant="outline" data-testid="ml-verdict" title={verdict.note || undefined}>{verdict.verdict === 'anomaly' ? L('mlRecord.vote.isReal', 'gerçek ✓') : L('mlRecord.vote.isNot', 'değil ✗')}{reasonText}{verdict.by ? ` · ${verdict.by}` : ''}</Badge>}
-        <span className="text-xs text-muted-foreground">{L('mlRecord.vote.note', 'Etiketiniz bu dedektörün isabet ölçüsüne (ML karnesi) girer.')}</span>
+        <span className="text-xs text-muted-foreground" data-testid="ml-vote-note">{precisionMode === 'on'
+          ? tr(voteNoteKey(precisionMode)) /* v0.10.2486: yalnız on kipinde gölge katkısı uyarısı */
+          : L(voteNoteKey(precisionMode), 'Etiketiniz bu dedektörün isabet ölçüsüne (ML karnesi) girer.')}</span>
       </div>
       {localized && asking && canWrite && (
         <MLVerdictReasonForm busy={busy} onCancel={() => setAsking(false)} onSave={(r, n) => { void put('not_anomaly', r, n); }} />

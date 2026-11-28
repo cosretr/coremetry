@@ -20,6 +20,7 @@ import { DatabaseProblemsSection } from '@/pages/databases/DatabaseProblemsSecti
 import { DatabaseErrorsSection } from '@/pages/databases/DatabaseErrorsSection';
 import type { DBDetail, SlowQueryRow } from '@/lib/types';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { useT } from '@/lib/i18n';
 
 // /database — the full-page database detail (v0.9.840).
 //
@@ -68,6 +69,7 @@ import { PageShell } from '@/components/coremetry/PageShell';
 // anda AÇILAMAZ; bölümler yine de kabuk hakkında hiçbir şey bilmiyor ki
 // gerekirse iki ayrı kabuğa sarılabilsinler.
 export default function DatabaseDetailPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const search = params.toString();
@@ -136,7 +138,7 @@ export default function DatabaseDetailPage() {
   if (!refObj) {
     return (
       <>
-        <Topbar title="Database" />
+        <Topbar title={tn('page.database')} />
         <PageShell>
           <Empty icon="⚠" title="No database in this link">
             The URL is missing <code>system</code> or <code>instance</code>.
@@ -152,7 +154,7 @@ export default function DatabaseDetailPage() {
 
   return (
     <>
-      <Topbar title="Database" range={range} onRangeChange={setRange} />
+      <Topbar title={tn('page.database')} range={range} onRangeChange={setRange} />
       <PageShell>
         <div style={{ fontSize: 11.5, color: 'var(--text3)', marginBottom: 8 }}>
           {/* v0.9.1320 — geri/kırıntı linkleri pencereyi ve env'i TAŞIR.

@@ -54,7 +54,7 @@ import { tsDateTime, tsLong, timeRangeToNs, fmtNum, fmtFixed } from '@/lib/utils
 import { alignTraceWindow } from '@/lib/traceWindow';
 import { suggestAttrKey, type AttrKeySuggestion } from '@/lib/attrKeySuggest';
 import { traceCountReasonHint } from '@/lib/traceCountReason';
-import { t as tl, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2314 — sayfa metni arayüz dilinde (trc.*; TR aynı)
+import { t as tl, tf, useLang, type Lang, useT } from '@/lib/i18n'; // v0.10.2314 — sayfa metni arayüz dilinde (trc.*; TR aynı)
 import { effectiveTraceSearch } from '@/lib/traceSearchTerm';
 import { lastReachablePage, reverseEndSort } from '@/lib/traceReach';
 import type { TraceCountResponse } from '@/lib/types';
@@ -110,18 +110,19 @@ type GroupBy =
   | 'http_method' | 'http_route' | 'http_status'
   | 'host' | 'deploy_env' | 'scope' | 'attr';
 
+// label = katalog anahtarı (render'da tl ile çevrilir)
 const GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
-  { value: 'operation',   label: 'Operation' },
-  { value: 'service',     label: 'Service' },
-  { value: 'kind',        label: 'Kind' },
-  { value: 'status',      label: 'Status' },
-  { value: 'http_method', label: 'HTTP method' },
-  { value: 'http_route',  label: 'HTTP route' },
-  { value: 'http_status', label: 'HTTP status' },
-  { value: 'host',        label: 'Host' },
-  { value: 'deploy_env',  label: 'Deploy env' },
-  { value: 'scope',       label: 'Scope' },
-  { value: 'attr',        label: 'Attribute…' },
+  { value: 'operation',   label: 'tracesP.group.operation' },
+  { value: 'service',     label: 'tracesP.group.service' },
+  { value: 'kind',        label: 'tracesP.group.kind' },
+  { value: 'status',      label: 'tracesP.group.status' },
+  { value: 'http_method', label: 'tracesP.group.http_method' },
+  { value: 'http_route',  label: 'tracesP.group.http_route' },
+  { value: 'http_status', label: 'tracesP.group.http_status' },
+  { value: 'host',        label: 'tracesP.group.host' },
+  { value: 'deploy_env',  label: 'tracesP.group.deploy_env' },
+  { value: 'scope',       label: 'tracesP.group.scope' },
+  { value: 'attr',        label: 'tracesP.group.attr' },
 ];
 
 // v0.9.878 — AGG_NATURAL SİLİNDİ: doğal yön artık kolon tanımındaki
@@ -135,12 +136,18 @@ const GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
 // v0.10.217 (Dynatrace düzeni) — id'ler sabit, ETİKET değişti:
 // operation → "Name" (ilk, baskın kolon), time → "Start time" (en sonda).
 const COL_LABEL: Record<string, string> = {
-  time: 'Start time', service: 'Service', operation: 'Name',
-  duration: 'Duration', spans: 'Spans', status: 'Status',
+  time: 'tracesP.col.time', service: 'tracesP.group.service', operation: 'tracesP.col.name',
+  duration: 'tracesP.col.duration', spans: 'tracesP.col.spans', status: 'tracesP.group.status',
   // v0.10.251 — kimlik küçük harf (prod yazımı: channel_code), ETİKET
   // operatörün yazımı (audit soru 5, önerilen varsayılan).
   channel_code: 'CHANNEL_CODE', function_code: 'FUNCTION_CODE',
 };
+// tracesP.* değerler katalog anahtarı; geri kalanı (CHANNEL_CODE…) olduğu gibi.
+function colLabel(id: string, lang: Lang): string {
+  const v = COL_LABEL[id];
+  if (!v) return id;
+  return v.startsWith('tracesP.') ? tl(v, lang) : v;
+}
 // v0.10.251 — ContextBar'ın bu sayfada uyguladığı boyutlar; namespace/compare
 // uygulanmıyor (backend FilterExpr yok — audit soru 8 açık) → çubukta devre dışı.
 // v0.10.257 (operatör): service sayfanın kendi picker'ında — çubukta İKİ KEZ çizilmez.
@@ -261,6 +268,7 @@ function storedTraceIds(key: string): string[] | null {
 
 function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => void }) {
   'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const navigate = useNavigate();
   const lang = useLang();
   // v0.10.219 — satır Link'i listenin O ANKİ URL'sini state olarak taşır;
@@ -958,21 +966,21 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   // kipinde primitif onları hiç çağırmaz (satırlar sunucu sırasında), yani
   // davranış aynı; `() => 0` yalnız "sıralanabilir" işaretiydi.
   const aggCols = useMemo<DataTableColumn<AggregateRow>[]>(() => [
-    { id: 'name', label: groupLabel(groupBy, groupAttr), sortValue: r => r.groupKey, naturalDir: 'asc', flex: true },
+    { id: 'name', label: groupLabel(groupBy, groupAttr, lang), sortValue: r => r.groupKey, naturalDir: 'asc', flex: true },
     // Service sıralanabilir DEĞİL (sunucu bu eksende sıralamıyor) — sortValue
     // yok, dolayısıyla başlık tıklanmaz. Eski elle <th>Service</th> ile aynı.
     ...(groupBy !== 'service'
-      ? [{ id: 'service', label: 'Service', width: 170 } as DataTableColumn<AggregateRow>]
+      ? [{ id: 'service', label: tl('tracesP.group.service', lang), width: 170 } as DataTableColumn<AggregateRow>]
       : []),
-    { id: 'count',     label: 'Traces',  sortValue: r => r.traceCount, numeric: true, width: 130 },
-    { id: 'perMin',    label: 'Per min', sortValue: r => r.perMin,     numeric: true, width: 100 },
-    { id: 'errorRate', label: 'Error %', sortValue: r => r.errorRate,  numeric: true, width: 100 },
-    { id: 'avg',       label: 'Avg',     sortValue: r => r.avgMs,      numeric: true, width: 95 },
+    { id: 'count',     label: tl('tracesP.agg.traces', lang), sortValue: r => r.traceCount, numeric: true, width: 130 },
+    { id: 'perMin',    label: tl('tracesP.agg.perMin', lang), sortValue: r => r.perMin,     numeric: true, width: 100 },
+    { id: 'errorRate', label: tl('tracesP.agg.errPct', lang), sortValue: r => r.errorRate,  numeric: true, width: 100 },
+    { id: 'avg',       label: tl('tracesP.agg.avg', lang), sortValue: r => r.avgMs,      numeric: true, width: 95 },
     { id: 'p50',       label: 'P50',     sortValue: r => r.p50Ms,      numeric: true, width: 95 },
     { id: 'p95',       label: 'P95',     sortValue: r => r.p95Ms,      numeric: true, width: 95 },
     { id: 'p99',       label: 'P99',     sortValue: r => r.p99Ms,      numeric: true, width: 95 },
-    { id: 'max',       label: 'Max',     sortValue: r => r.maxMs,      numeric: true, width: 95 },
-  ], [groupBy, groupAttr]);
+    { id: 'max',       label: tl('tracesP.agg.max', lang), sortValue: r => r.maxMs,      numeric: true, width: 95 },
+  ], [groupBy, groupAttr, lang]);
 
   // Eski link köprüsü: `?aggSort=p99&aggOrder=asc`. Önceliği `s_traces-agg`in
   // ALTINDA, localStorage'ın ÜSTÜNDE — paylaşılan linkin niyeti alıcının
@@ -1149,7 +1157,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
       const server = SERVER_SORTABLE[id];
       return {
         id,
-        label: COL_LABEL[id] ?? id,
+        label: colLabel(id, lang),
         width: COL_W[id] ?? ATTR_W,
         // v0.9.542 (operatör: "boşluklar güzel durmuyor, fit olsun") —
         // artan genişliği Operation emsin. table-layout:fixed artanı
@@ -1169,7 +1177,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
         naturalDir: (id === 'service' || id === 'operation' ? 'asc' : 'desc') as SortOrder,
         sortValue: server ? sortAccessor(server) : undefined,
       };
-    }), [colIds]);
+    }), [colIds, lang]);
 
   const dt = useDataTable<TraceRow>({
     storageKey: 'traces-list',
@@ -1364,7 +1372,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   const pageActions = (
     <>
       <SavedViewsBar page="traces" variant="compact" size="sm" />
-      <Button variant="outline" size="xs" onClick={reset}>Reset</Button>
+      <Button variant="outline" size="xs" onClick={reset}>{tl('tracesP.reset', lang)}</Button>
       <a className="sec trl-csv"
       href={`/api/traces/export.csv?${(() => {
         const { from, to } = exportRangeNs;
@@ -1385,7 +1393,8 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
         if (order) p.set('order', order);
         return p.toString();
       })()}`}
-      download title="Download up to 10k matching traces as CSV (postmortem / audit use)">
+      download title={tl('tracesP.csvTip', lang)}>
+        {/* i18n-exempt: file format name */}
         ⬇ CSV
       </a>
     </>
@@ -1395,7 +1404,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
     <>
       {/* v0.9.430 — Topbar seçimi out-of-band: hook yığını kendisi
           geçersizleştirir, elle temizlik gerekmez. */}
-      <Topbar title="Traces" context={{ ctx: ctxForBar, envApplies: true, hidden: TRACES_CONTEXT_HIDDEN }} />
+      <Topbar title={tn('nav.traces')} context={{ ctx: ctxForBar, envApplies: true, hidden: TRACES_CONTEXT_HIDDEN }} />
       <PageShell>
         {/* v0.10.1423 (operatör: "Sağ üst köşedeki trace ID / function ID
             kısmına gerek yok artık. Search'ten zaten aranabiliyor.") — sağ
@@ -1428,12 +1437,12 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 <TooltipContent>{tl(stripCollapsed ? 'trc.strip.showTip' : 'trc.strip.collapseTip', lang)}</TooltipContent>
               </Tooltip>
               <SegmentedControl aria-label={tl('trc.strip.vizAria', lang)} value={viz} onChange={setViz} options={[
-                { value: 'volume', label: 'Volume' }, { value: 'latency', label: 'Latency' },
+                { value: 'volume', label: tl('tracesP.viz.volume', lang) }, { value: 'latency', label: tl('tracesP.viz.latency', lang) },
               ]} />
               {zoomDepth > 0 && (
                 <Button variant="outline" size="xs" onClick={clearBrush}
-                  title="Zoom back one step (double-click on the chart does the same)">
-                  ⤺ Zoom back{zoomDepth > 1 ? ` (${zoomDepth})` : ''}
+                  title={tl('tracesP.zoomBackTip', lang)}>
+                  {tl('tracesP.zoomBack', lang)}{zoomDepth > 1 ? ` (${zoomDepth})` : ''}
                 </Button>
               )}
             </>
@@ -1455,7 +1464,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 tone={headerStats.err > 0 ? 'err' : undefined}
                 title={errStrip ? errorStripHint(errStrip.mode, errStrip.capped, errStrip.scopeOnly, lang)
                   : tl('trc.strip.errTip', lang)} />
-              <HeaderStat label="ERR RATE" value={`${headerStats.errRate.toFixed(2)}%`} tone={headerStats.errRate > 0 ? 'err' : undefined} />
+              <HeaderStat label={tl('tracesP.strip.errRate', lang)} value={`${headerStats.errRate.toFixed(2)}%`} tone={headerStats.errRate > 0 ? 'err' : undefined} />
               <HeaderStat label={stripStatHeaderLabel(stripStat)} value={headerStats.rtAvg ? fmtDur(headerStats.rtAvg) : '—'}
                 title={tf('trc.strip.rtTip', lang, { stat: stripStat })} />
             </>
@@ -1469,7 +1478,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
               {/* v0.10.1524 — ilk yüklemede de Saved ▾ / Reset / CSV ulaşılır. */}
               <span className="trl-strip-actions">{pageActions}</span>
             </div>
-          ) : viz === 'volume' ? (
+          ) : viz === 'volume' ? ( // i18n-exempt: JSX ternary, not text
             // slimmer + recedes — it's the brush/overview "tool", not the
             // headline chart; the RED strip below carries the filtered numbers.
             <VolumeChart count={volSeries?.count ?? null} errors={volSeries?.errors ?? null} latency={volSeries?.rt ?? null}
@@ -1502,9 +1511,9 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                     nokta renkleriyle aynı ton (noktalar yarı saydam çizilir): ok
                     nötr (--text3), hata kırmızı. */}
                 <span className="trl-lat-legend">
-                  <span className="trl-dot" /> ok
-                  <span className="trl-dot is-err" /> error
-                  <span className="trl-ml8">· drag to brush · y = duration (log)</span>
+                  <span className="trl-dot" /> {tl('tracesP.legend.ok', lang)}
+                  <span className="trl-dot is-err" /> {tl('tracesP.legend.err', lang)}
+                  <span className="trl-ml8">{tl('tracesP.legend.hint', lang)}</span>
                 </span>
                 <span className="trl-lat-right">
                   {vizStats}
@@ -1532,15 +1541,15 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                   v0.10.1423 — Trace ID kutusu kalktı; işaret yerinde: `/`
                   hedefi DOM sırasına değil bu açık işarete bağlı kalır. */}
               <ServicePicker value={draft.service} onChange={v => setDraft({ ...draft, service: v })}
-                placeholder="Filter by service…" width={170} onEnter={(v) => apply(v)}
+                placeholder={tl('tracesP.f.service', lang)} width={170} onEnter={(v) => apply(v)}
                 dataTour="traces-service" shortcutSearch />
               <OperationPicker service={draft.service} value={draft.op || draft.search}
                 onChange={v => setDraft({ ...draft, search: v, op: '' })}
                 onPick={v => setDraft(d => ({ ...d, op: v, search: '' }))}
-                placeholder="Operation, or an id (function_id / trace ID)…" width={240} onEnter={() => apply()} />
-              <input placeholder="Min ms" data-tour="traces-min-ms" value={draft.minMs}
+                placeholder={tl('tracesP.f.op', lang)} width={240} onEnter={() => apply()} />
+              <input placeholder={tl('tracesP.f.minMs', lang)} data-tour="traces-min-ms" value={draft.minMs}
                 onChange={e => setDraft({ ...draft, minMs: e.target.value })} type="number" className="trl-ms" />
-              <input placeholder="Max ms" value={draft.maxMs}
+              <input placeholder={tl('tracesP.f.maxMs', lang)} value={draft.maxMs}
                 onChange={e => setDraft({ ...draft, maxMs: e.target.value })} type="number" className="trl-ms" />
               {/* v0.9.303 (operatör) — Errors only / Root traces artık
                   Search'ün SOLUNDA, kendi satırlarında değil. İkisi de
@@ -1553,20 +1562,20 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 title={tl('trc.f.errorsTip', lang)}>
                 <input type="checkbox" checked={draft.hasError}
                   onChange={() => setDraft({ ...draft, hasError: !draft.hasError })} />
-                <span className={draft.hasError ? 'trl-check-l is-err' : 'trl-check-l'}>Errors</span>
+                <span className={draft.hasError ? 'trl-check-l is-err' : 'trl-check-l'}>{tl('tracesP.f.errors', lang)}</span>
               </label>
               <label className="trl-check"
                 title={tf('trc.f.rootTip', lang, { def: rootDefLabel })}>
                 <input type="checkbox" checked={draft.rootOnly}
                   onChange={() => setDraft({ ...draft, rootOnly: !draft.rootOnly })} />
-                <span className={draft.rootOnly ? 'trl-check-l is-on' : 'trl-check-l'}>Root</span>
+                <span className={draft.rootOnly ? 'trl-check-l is-on' : 'trl-check-l'}>{tl('tracesP.f.root', lang)}</span>
               </label>
               {/* v0.10.1332 (operatör onaylı mockup) — Search md (üç barda tek
                   boy); son filtrenin (Errors / Root) hemen arkasında, ardından
                   boşluk ve sağ küme (görünüm anahtarı). v0.10.2202 (operatör):
                   "Enter ↵" ipucu Traces'te kalktı — Enter yine arar. */}
               <span className="search-go">
-                <Button variant="default" onClick={() => apply()}>Search</Button>
+                <Button variant="default" onClick={() => apply()}>{tl('tracesP.f.search', lang)}</Button>
               </span>
           {/* v0.10.1088 (operatör: "Traces sayfasındaki service search sol başta
               olabilir") — görünüm anahtarı (Traces / Aggregated / Shapes) ve
@@ -1574,15 +1583,15 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
               sayfasındaki gibi en solda. */}
           <span style={{ marginLeft: 'auto' }} />
           <SegmentedControl aria-label={tl('trc.viewAria', lang)} value={view} onChange={setView} options={[
-            { value: 'list', label: 'Traces' },
-            { value: 'aggregate', label: 'Aggregated' },
-            { value: 'shapes', label: 'Shapes', title: 'Cluster traces by their (service, operation) signature — find dominant call patterns at a glance' },
+            { value: 'list', label: tl('nav.traces', lang) },
+            { value: 'aggregate', label: tl('tracesP.view.agg', lang) },
+            { value: 'shapes', label: tl('tracesP.view.shapes', lang), title: tl('tracesP.view.shapesTip', lang) },
           ]} />
           {view === 'aggregate' && (
             <>
-              <span className="trl-groupby-l">Group by:</span>
+              <span className="trl-groupby-l">{tl('tracesP.groupBy', lang)}</span>
               <select value={groupBy} onChange={e => setGroupBy(e.target.value as GroupBy)}>
-                {GROUP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {GROUP_OPTIONS.map(o => <option key={o.value} value={o.value}>{tl(o.label, lang)}</option>)}
               </select>
               {/* v0.9.933 (UX denetimi Ö14) — anahtar kutusu artık KEŞİF
                   yapıyor. Çıplak bir <input>tü: operatör tam da "hangi
@@ -1596,7 +1605,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
               {groupBy === 'attr' && (
                 <Combobox value={groupAttr} onChange={setGroupAttr}
                   options={attrKeys}
-                  placeholder="attribute key (e.g. user.id)" width={200} />
+                  placeholder={tl('tracesP.attrKeyPh', lang)} width={200} />
               )}
               {/* v0.8.453 (B2-c) — genel HAVING: grup metriği eşiği.
                   Post-aggregate (MV fast-path hızını korur); koşullar
@@ -1644,15 +1653,15 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
         {/* requireServices banner. */}
         {filter.requireServices.length > 0 && (
           <div className="trl-require">
-            <span className="trl-require-l">Trace must include:</span>
+            <span className="trl-require-l">{tl('tracesP.require', lang)}</span>
             {filter.requireServices.map((s) => (
-              <Chip key={s} className="mono" removeLabel={`Remove ${s} from the required services`}
+              <Chip key={s} className="mono" removeLabel={tf('tracesP.requireRemove', lang, { svc: s })}
                 onRemove={() => setFilter({ ...filter, requireServices: filter.requireServices.filter(x => x !== s) })}>
                 {s}
               </Chip>
             ))}
             <Button variant="outline" size="xs" onClick={() => setFilter({ ...filter, requireServices: [] })} className="trl-push">
-              Clear all
+              {tl('tracesP.clearAll', lang)}
             </Button>
           </div>
         )}
@@ -1669,12 +1678,12 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 (?filterGroup=) gelir ve düz çiplere dönülebilir. */}
             {grouped && (
               <Button variant="ghost" size="xs"
-                title="Back to the flat filter chips (drops any OR / nested groups)"
+                title={tl('tracesP.flattenTip', lang)}
                 onClick={() => {
                   setAdvFilters((advGroup?.filters ?? []).filter(f => f.k && f.k.trim()));
                   setAdvGroup(null);
                 }}>
-                ⊟ Flatten to chips
+                {tl('tracesP.flatten', lang)}
               </Button>
             )}
           </div>
@@ -1713,7 +1722,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 header auto-renders the sortable/resizable data columns, so the
                 add/remove affordances live here above the table. */}
             <div className="trl-coltools">
-              <TracesColumnPicker order={colOrderIds} labelOf={id => COL_LABEL[id] ?? id}
+              <TracesColumnPicker order={colOrderIds} labelOf={id => colLabel(id, lang)}
                 onChange={applyColOrder}
                 onRemove={id => setExtraCols(extraCols.filter(x => x !== id))} />
               <ColumnManager cols={extraCols}
@@ -1722,13 +1731,13 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                   yalnız entity katmanı açıkken (hücreler entity sayfalarına link olur). */}
               {k8sOn && canAddK8sColumns(extraCols) && (
                 <Button type="button" variant="ghost" size="xs" title={tl('trc.k8sColsTip', lang)}
-                  onClick={() => setExtraCols(withK8sColumns(extraCols))}>+ K8s columns</Button>
+                  onClick={() => setExtraCols(withK8sColumns(extraCols))}>{tl('tracesP.k8sCols', lang)}</Button>
               )}
               {/* v0.10.924 — buton bütünlüğü Faz 2: elle kurulmuş kolon
                   çipi + ham × yerine Chip onRemove (× içselleştirilmiş,
                   erişilebilir adı removeLabel). */}
               {extraCols.map(c => (
-                <Chip key={c} size="xs" className="mono" removeLabel={`Remove the ${c} column`}
+                <Chip key={c} size="xs" className="mono" removeLabel={tf('tracesP.colRemove', lang, { col: c })}
                   onRemove={() => setExtraCols(extraCols.filter(x => x !== c))}>
                   {c}
                 </Chip>
@@ -1880,21 +1889,21 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                       /* v0.10.520 — liste bitti: kesin toplam listenin kendisinden
                          (sayfa × 50 + bu sayfa); sunucu sayımı gerekmez. */
                       <span title={tl('trc.count.exactTip', lang)}>
-                        {(page * 50 + traces.length).toLocaleString()} total
+                        {tf('tracesP.count.total', lang, { n: (page * 50 + traces.length).toLocaleString() })}
                       </span>
-                    ) : countRes?.reason ? (
+                    ) : countRes?.reason ? ( // i18n-exempt: JSX ternary, not text
                       <span title={traceCountReasonHint(countRes.reason, lang)}>
-                        showing {traces.length}{hasMore ? '+' : ''}{tl('trc.count.noTotal', lang)}
+                        {tf('tracesP.count.showing', lang, { n: `${traces.length}${hasMore ? '+' : ''}` })}{tl('trc.count.noTotal', lang)}
                       </span>
-                    ) : countRes ? (
+                    ) : countRes ? ( // i18n-exempt: JSX ternary, not text
                       <span title={countRes.atLeast
                         ? tf('trc.count.capTip', lang, { n: countRes.value.toLocaleString() })
                         : tl('trc.count.matchTip', lang)}>
-                        {countRes.value.toLocaleString()}{countRes.atLeast ? '+' : ''} total
+                        {tf('tracesP.count.total', lang, { n: `${countRes.value.toLocaleString()}${countRes.atLeast ? '+' : ''}` })}
                       </span>
                     ) : (
                       /* v0.10.654 — sayım yolda (otomatik); link yok. */
-                      <span title={tl('trc.count.pending', lang)}>showing {traces.length}{hasMore ? '+' : ''}</span>
+                      <span title={tl('trc.count.pending', lang)}>{tf('tracesP.count.showing', lang, { n: `${traces.length}${hasMore ? '+' : ''}` })}</span>
                     )}
                     {/* v0.10.522 (operatör: "steps rows göremedim") — teşhis linki
                         yalnız boş sonuçta vardı; dolu listede de admin'e (aynı
@@ -2015,7 +2024,7 @@ function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s = fals
     // yeşil "OK" rozeti kalktı, hücre görsel olarak boş (sapma olmayan satır
     // sinyal taşımaz). Kelime ekran okuyucuya kalır (sr-only).
     case 'status':    return t.hasError
-      ? <><span className="badge b-err">ERROR</span>{t.errorSpans ? <span className="cell-hint">{t.errorSpans} span</span> : null}</>
+      ? <><span className="badge b-err">ERROR</span>{t.errorSpans ? <span className="cell-hint">{t.errorSpans} span</span> : null}</> // i18n-exempt: OTel status code (ERROR/OK)
       : <span className="sr-only">OK</span>;
     default: {
       // Attribute-column values render at the SAME size as every other cell
@@ -2070,12 +2079,12 @@ function AggregateTable({ agg, groupBy, dt, onDrill, state }: {
                     {fmtNum(a.traceCount)}
                     {missingRaw > 0 && (
                       <span className="badge b-warn trl-drill"
-                        title={`${fmtNum(drillable)} of ${fmtNum(a.traceCount)} traces still have raw span data — older traces aged out of the raw retention window.`}>
-                        {fmtNum(drillable)} drillable
+                        title={tf('tracesP.agg.drillTip', lang, { n: fmtNum(drillable), total: fmtNum(a.traceCount) })}>
+                        {tf('tracesP.agg.drillable', lang, { n: fmtNum(drillable) })}
                       </span>
                     )}
                   </td>
-                  <td className="num" title="Traces per minute">{fmtPerMin(a.perMin)}</td>
+                  <td className="num" title={tl('tracesP.agg.perMinTip', lang)}>{fmtPerMin(a.perMin)}</td>
                   <td className="num"><span className={`badge ${errCls}`}>{fmtFixed(a.errorRate, 2)}%</span></td>
                   <td className="num">{fmtFixed(a.avgMs, 1)}ms</td>
                   <td className="num">{fmtFixed(a.p50Ms, 1)}ms</td>
@@ -2091,16 +2100,17 @@ function AggregateTable({ agg, groupBy, dt, onDrill, state }: {
       {/* v0.10.967 — sayı satırı satırlardan türer: yalnız grup varken. */}
       {agg.length > 0 && (
         <div className="trl-aggfoot">
-          {agg.length} groups · grouped by <b className="trl-ca2">{groupBy}</b> · sorted by <b>{dt.sort.id ?? 'count'}</b> {dt.sort.dir} · click a row to drill down
+          {tf('tracesP.agg.footGroups', lang, { n: agg.length })} <b className="trl-ca2">{groupBy}</b> {tl('tracesP.agg.footSorted', lang)} <b>{dt.sort.id ?? 'count'}</b> {dt.sort.dir} {tl('tracesP.agg.footClick', lang)}
         </div>
       )}
     </>
   );
 }
 
-function groupLabel(g: GroupBy, attr: string): string {
-  if (g === 'attr') return attr ? `Attr · ${attr}` : 'Attribute…';
-  return GROUP_OPTIONS.find(o => o.value === g)?.label ?? 'Group';
+function groupLabel(g: GroupBy, attr: string, lang: Lang): string {
+  if (g === 'attr') return attr ? tf('tracesP.group.attrNamed', lang, { attr }) : tl('tracesP.group.attr', lang);
+  const key = GROUP_OPTIONS.find(o => o.value === g)?.label;
+  return key ? tl(key, lang) : tl('tracesP.group.fallback', lang);
 }
 
 function fmtPerMin(n: number): string {
@@ -2218,25 +2228,25 @@ function TracesEmptyDetail({ service, search, range, onSwitchView, narrowedFromN
             {/* v0.10.307 — Operator-reported: "3 saat seçince no traces". Sorgu kaynak
                 sınırına takılınca arka uç pencereyi kısaltır; bu boş sonuç "yok" değil
                 "bakılamadı"dır ve öyle söylenir. */}
-            The query hit its resource budget, so the backend only searched from <b>{tsLong(narrowedFromNs!)}</b> onward — and found nothing there.{/* 'narrowed' yalnız narrowedFromNs doluyken döner (emptyReason.ts) */}
-            Older traces in your range were <b>not</b> searched. Narrow the range (e.g. 1h) or simplify the filter; do not read this as "no matching traces".
+            {tl('tracesP.empty.narrowedA', lang)} <b>{tsLong(narrowedFromNs!)}</b>{tl('tracesP.empty.narrowedB', lang)}{/* 'narrowed' yalnız narrowedFromNs doluyken döner (emptyReason.ts) */}
+            {tl('tracesP.empty.narrowedC', lang)} <b>{tl('tracesP.empty.not', lang)}</b>{tl('tracesP.empty.narrowedD', lang)}
           </>
-        ) : reason === 'predicate' ? (
+        ) : reason === 'predicate' ? ( // i18n-exempt: JSX ternary, not text
           <>
-            <b>{mvSpans!.toLocaleString()}</b> spans recorded for <code>{service}</code> in this window (5-min MV) and <b>{serviceSpans!.toLocaleString()}</b> raw spans are still stored — none of them match the search <span className="mono">{search}</span>. The data is within retention; the search text does not occur in these spans' name, route or attribute values. Try a different or shorter term, or drop the search.
+            <b>{mvSpans!.toLocaleString()}</b>{tl('tracesP.empty.recordedFor', lang)}<code>{service}</code>{tl('tracesP.empty.predB', lang)}<b>{serviceSpans!.toLocaleString()}</b>{tl('tracesP.empty.predC', lang)}<span className="mono">{search}</span>{tl('tracesP.empty.predD', lang)}
           </>
-        ) : reason === 'aged' ? (
+        ) : reason === 'aged' ? ( // i18n-exempt: JSX ternary, not text
           <>
-            <b className="trl-cwarn">{mvSpans!.toLocaleString()}</b> spans recorded for <code>{service}</code> in this window via the 5-min MV, but the raw spans table holds <b>none</b> for it here. The span data aged out past the raw-spans TTL (or never landed) while the MV still holds the rollup.{' '}
-            <Button variant="outline" size="xs" onClick={onSwitchView} className="trl-ml4">Switch to Aggregate view →</Button>
+            <b className="trl-cwarn">{mvSpans!.toLocaleString()}</b>{tl('tracesP.empty.recordedFor', lang)}<code>{service}</code>{tl('tracesP.empty.agedB', lang)}<b>{tl('tracesP.empty.none', lang)}</b>{tl('tracesP.empty.agedC', lang)}{' '}
+            <Button variant="outline" size="xs" onClick={onSwitchView} className="trl-ml4">{tl('tracesP.empty.toAgg', lang)}</Button>
           </>
-        ) : reason === 'unmeasured' ? (
+        ) : reason === 'unmeasured' ? ( // i18n-exempt: JSX ternary, not text
           <>
-            <b className="trl-cwarn">{mvSpans!.toLocaleString()}</b> spans recorded for <code>{service}</code> in this window via the 5-min MV, but no raw spans match the search. The server could not measure whether raw spans for this service are still stored, so this is either the search predicate or data aged out past the raw-spans TTL.{' '}
-            <Button variant="outline" size="xs" onClick={onSwitchView} className="trl-ml4">Switch to Aggregate view →</Button>
+            <b className="trl-cwarn">{mvSpans!.toLocaleString()}</b>{tl('tracesP.empty.recordedFor', lang)}<code>{service}</code>{tl('tracesP.empty.unmeasuredB', lang)}{' '}
+            <Button variant="outline" size="xs" onClick={onSwitchView} className="trl-ml4">{tl('tracesP.empty.toAgg', lang)}</Button>
           </>
         ) : (
-          <>Try widening the time range, dropping the service or search filter, or turning off the "Root traces" chip. If even an unfiltered query is empty, check ingest health at <Link to="/system/stats" className="trl-ca2">system stats</Link>.</>
+          <>{tl('tracesP.empty.default', lang)} <Link to="/system/stats" className="trl-ca2">{tl('tracesP.empty.sysStats', lang)}</Link>.</>
         )}
       </div>
       {identity?.traceId && (
@@ -2271,8 +2281,9 @@ function TracesEmptyDetail({ service, search, range, onSwitchView, narrowedFromN
       {matchingSpans !== undefined && (
         <div className={matchingSpans > 0 ? 'trl-diag is-warn' : 'trl-diag'}>
           {matchingSpans > 0
-            ? <>Diagnostic: <b>{matchingCapped ? '≥ ' : ''}{matchingSpans.toLocaleString()}</b> spans in this window match the filter, yet the trace list came back empty — the backend logged the query plan (<span className="mono">[traces] EMPTY list</span>).</>
-            : <>Diagnostic: nothing in this window matches search + filters (trace-level: a span matching the search and spans matching each chip, anywhere in the trace) — the data or the predicate, not the list query.</>}
+            // i18n-exempt: backend log marker ([traces] EMPTY list)
+            ? <>{tl('tracesP.diag.label', lang)} <b>{matchingCapped ? '≥ ' : ''}{matchingSpans.toLocaleString()}</b>{tl('tracesP.diag.matchB', lang)}<span className="mono">[traces] EMPTY list</span>).</>
+            : <>{tl('tracesP.diag.nothing', lang)}</>}
         </div>
       )}
       {explainHref && (

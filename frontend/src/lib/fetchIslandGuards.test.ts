@@ -53,7 +53,7 @@ describe('C2 — Explore üç mod (v0.9.939)', () => {
   });
 
   it('yenileme izi var', () => {
-    expect(read('../pages/Explore.tsx')).toContain('yenileniyor…');
+    expect(read('../pages/Explore.tsx')).toContain("tn('exploreP.refreshing')"); // v0.10.2486 — 'yenileniyor…' katalogda
   });
 });
 

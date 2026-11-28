@@ -66,10 +66,10 @@ import { ProblemSignalsToggle, ProblemSignalsRow, useRowExpand } from './inbox/P
 // satır hücreleri kendi dosyalarında (davranış değişmez).
 import {
   PRIO_ALL, PRIO_DEFAULT, SORT_DEFAULT, INBOX_SORT_IDS, KIND_ALL, KIND_DEFAULT, KIND_ALL_RETIRED, KIND_DEFAULT_RETIRED,
-  KIND_LABEL, SUBJECT_LANES, SUBJECT_LABEL, SUBJECT_TITLE, STATUS_PIVOTS, STATUS_LABEL, INBOX_STATUS_CODEC, DEFAULT_MIN_OCC, type InboxStatus,
+  KIND_LABEL, KIND_LABEL_KEY, SUBJECT_LANES, SUBJECT_LABEL, SUBJECT_TITLE, STATUS_PIVOTS, STATUS_LABEL, INBOX_STATUS_CODEC, DEFAULT_MIN_OCC, type InboxStatus,
 } from './inbox/inboxFilters';
 import { inboxCols, capSortLabel, occLine } from './inbox/inboxColumns';
-import { t as tl, tf, useLang } from '@/lib/i18n'; // v0.10.2283 — Türkçe metinler lib/i18n inbox.* (TR aynı)
+import { t as tl, tf, useLang, useT } from '@/lib/i18n'; // v0.10.2283 — Türkçe metinler lib/i18n inbox.* (TR aynı)
 import { StdOriginLine } from '@/features/anomalies/StdOriginLine';
 import { TeamCell, AssigneePill, RowChips, DetailLine, GraphRowSub, GraphFrequentChip, GraphClusterMembers, ImpactCell, ConfidenceCell, EvidenceCell, ClosedWhen } from './inbox/InboxCells';
 
@@ -113,6 +113,7 @@ export default function InboxPage() {
 }
 
 function ProblemsTab({ tabStrip }: { tabStrip: ReactNode }) {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const navigate = useNavigate();
   // v0.10.1827 — tür sözlüğü + varsayılan Incidents ana anahtarına bağlı
   // (kabuk bayrağı user.features.incidents; yoksa emekli).
@@ -752,7 +753,7 @@ function ProblemsTab({ tabStrip }: { tabStrip: ReactNode }) {
           (unmount DEĞİL): facet/seçim/scroll state'i "← Problems"te
           yerinde duruyor. /problems'taki v0.8.426/428 deseninin aynısı. */}
       {/* v0.10.1032 — ?anomaly= tam sayfası da aynı kuralla (kendi Topbar'ı var). */}
-      {!problemParam && !anomalyParam && <Topbar title="Problems" showEnv envApplies />}
+      {!problemParam && !anomalyParam && <Topbar title={tn('nav.inbox')} showEnv envApplies />}
       {/* v0.9.981 (D3.1) — `id="content"` DEĞİL `.page-body`: detay açıkken
           bu kap gizli ama MOUNT'lu kalıyor, dolayısıyla id'li olsaydı aynı
           DOM'da iki `#content` bulunurdu (geçersiz HTML + `getElementById`
@@ -829,7 +830,7 @@ function ProblemsTab({ tabStrip }: { tabStrip: ReactNode }) {
           {subjectLane === 'service' && (
             <FacetMultiSelect label={tl('inbox.f.kind', lang)}
               options={kindAll.map(k => ({
-                value: k, label: KIND_LABEL[k], count: counts[k] ?? 0 }))}
+                value: k, label: tl(KIND_LABEL_KEY[k], lang), count: counts[k] ?? 0 }))}
               selected={kindSet as Set<string>}
               onToggle={k => toggleKind(k as InboxKind)}
               onSolo={k => soloKind(k as InboxKind)} onAll={allKind} />
@@ -1332,14 +1333,14 @@ function ProblemsTab({ tabStrip }: { tabStrip: ReactNode }) {
           {/* Singular: this is ONE problem, reached from a notification deep
               link. Plural "Problems" is the merged queue (v0.9.323). v0.10.2170
               — Topbar host'tan buraya taşındı (görünüm aynı). */}
-          <Topbar title="Problem" showEnv envApplies />
+          <Topbar title={tn('page.problem')} showEnv envApplies />
           {/* v0.10.1032 (inceleme) — kimlikle anahtarlı: A'dan B'ye geçişte
               açılır bölümlerin ve triyajın meşgul/hata durumu taşınmaz. */}
           <AlertProblemHost
             key={problemParam}
             id={problemParam}
             isAdmin={isAdmin}
-            backLabel="← Problems"
+            backLabel={`← ${tn('nav.inbox')}`}
             onBack={() => openDetail('problem', null)}
           />
         </>

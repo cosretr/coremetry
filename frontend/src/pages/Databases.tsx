@@ -57,6 +57,7 @@ import { PageShell } from '@/components/coremetry/PageShell';
 // vs receiver-driven) from colliding in one list; each
 // audience scans the panel that matches their question.
 export default function DatabasesPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const tr = useT(); // v0.10.1525 — "All statements" / "Tüm sorgular"
   const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   // v0.9.86 (operatör talebi) — db tipi (?dbsys=) + db.name (?dbname=)
@@ -329,7 +330,7 @@ export default function DatabasesPage() {
 
   return (
     <>
-      <Topbar title="Databases" range={range} onRangeChange={setRange} envApplies />
+      <Topbar title={tn('nav.databases')} range={range} onRangeChange={setRange} envApplies />
       <PageShell>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
           <select value={dbsys} onChange={e => setFilter('dbsys', e.target.value)}

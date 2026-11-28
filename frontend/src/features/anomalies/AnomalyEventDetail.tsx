@@ -120,7 +120,7 @@ export function AnomalyEventHost({ id, isAdmin, onBack, backLabel = '← Problem
   if (ev) {
     return (
       <>
-        <Topbar title={t('pd.meta.anomaly', lang)} />
+        <Topbar title={t('page.signal', lang)} />
         <AnomalyEventDetail event={ev} isAdmin={isAdmin} onBack={onBack} />
       </>
     );
@@ -128,7 +128,7 @@ export function AnomalyEventHost({ id, isAdmin, onBack, backLabel = '← Problem
   if (gone) {
     return (
       <>
-        <Topbar title={t('pd.meta.anomaly', lang)} />
+        <Topbar title={t('page.signal', lang)} />
         <PageShell>
           <Empty icon="❓" title={t('aed.host.missing', lang)}>
             {t('aed.host.missingBody', lang)}{' '}
@@ -141,7 +141,7 @@ export function AnomalyEventHost({ id, isAdmin, onBack, backLabel = '← Problem
   if (byID.isError) {
     return (
       <>
-        <Topbar title={t('pd.meta.anomaly', lang)} />
+        <Topbar title={t('page.signal', lang)} />
         <PageShell>
           <Empty icon="⚠" title={t('aed.host.failed', lang)}>
             <Button variant="secondary" size="sm" onClick={() => { void byID.refetch(); }}>{t('pd.host.retry', lang)}</Button>{' '}
@@ -153,7 +153,7 @@ export function AnomalyEventHost({ id, isAdmin, onBack, backLabel = '← Problem
   }
   return (
     <>
-      <Topbar title={t('pd.meta.anomaly', lang)} />
+      <Topbar title={t('page.signal', lang)} />
       <PageShell><Spinner /></PageShell>
     </>
   );

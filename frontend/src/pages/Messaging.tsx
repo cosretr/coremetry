@@ -22,7 +22,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/tabs';
 import { HttpStat } from '@/pages/service/httpMetricsViz';
 import { fmtSmart } from '@/lib/chartFmt';
 import { fmtNum } from '@/lib/utils';
-import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2306 — sayfa metinleri arayüz dilinde (TR aynı)
+import { t, tf, useLang, useT } from '@/lib/i18n'; // v0.10.2306 — sayfa metinleri arayüz dilinde (TR aynı)
 
 // /messaging — top-level queue / topic technologies overview.
 // Kafka brokers, RabbitMQ vhosts, IBM MQ queues, NATS subjects,
@@ -45,6 +45,7 @@ import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2306 — sayfa metinleri a
 type MsgView = 'topics' | 'consumers';
 
 export default function MessagingPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   const [params, setParams] = useSearchParams();
   // Prior-window comparison — off by default (second CH scan);
@@ -230,7 +231,7 @@ export default function MessagingPage() {
 
   return (
     <>
-      <Topbar title="Messaging" range={range} onRangeChange={setRange} />
+      <Topbar title={tn('nav.messaging')} range={range} onRangeChange={setRange} />
       <PageShell>
         <div style={{ marginBottom: 14, fontSize: 12, color: 'var(--text2)' }}>
           Every queue / topic the platform's services produced to or consumed from

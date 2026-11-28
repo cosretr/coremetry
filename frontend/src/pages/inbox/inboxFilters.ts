@@ -98,9 +98,16 @@ export const KIND_DEFAULT_RETIRED: readonly InboxKind[] = ['problem']; // v0.10.
 // durum-kodu grupları ("404"). Varsayılan facet'te KAPALI (KIND_DEFAULT
 // değişmedi) — bankada beklenen istemci hataları triage'ı boğmasın;
 // chip sayısı yine görünür, tek tıkla açılır (v0.9.417 görünürlük ruhu).
+// v0.10.2486 dilim 2 — tek adlar (audit §1.2): exception = Errors (Hatalar),
+// anomaly = Signals (Sinyaller), alarm kuralı = Rules (Kurallar). Facet etiketi
+// katalogdan (KIND_LABEL_KEY); bu EN sabiti yalnız sayfa giriş paragrafında.
 export const KIND_LABEL: Record<InboxKind, string> = {
-  problem: 'Problems', exception: 'Exceptions', httperror: 'HTTP errors',
-  anomaly: 'Anomalies', incident: 'Incidents',
+  problem: 'Rules', exception: 'Errors', httperror: 'HTTP errors',
+  anomaly: 'Signals', incident: 'Incidents',
+};
+export const KIND_LABEL_KEY: Record<InboxKind, string> = {
+  problem: 'nav.alerts', exception: 'nav.problems', httperror: 'inbox.kindPl.httperror',
+  anomaly: 'inbox.tab.signals', incident: 'nav.incidents',
 };
 
 // v0.9.254 — 'ignored' yalnızca exception gruplarını gösterir (problem'ler

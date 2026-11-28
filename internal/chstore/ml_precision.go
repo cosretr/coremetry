@@ -124,7 +124,7 @@ func mlScorecardSQL(withReason, withOrigin bool) string {
 		  ),
 		  cs AS (` + problemCaseLabelSQL + `),
 		  pl AS (
-		    SELECT p.id AS problem_id, c.source_id != '' AS has_case, c.case_cat AS case_cat, v.name AS triage,
+		    SELECT p.id AS problem_id, c.source_id != '' AS has_case, c.case_cat AS case_cat, c.case_at AS case_at, v.name AS triage,
 		      toUInt8(p.resolved_at IS NOT NULL
 		        AND dateDiff('second', p.started_at, assumeNotNull(p.resolved_at)) < 900
 		        AND (position(p.description, 'auto-resolved:') > 0 OR position(p.description, 'kendiliğinden kapandı') > 0)) AS short_auto
@@ -143,6 +143,7 @@ func mlScorecardSQL(withReason, withOrigin bool) string {
 		           dateDiff('second', m.started_at, e.created_at) AS label_s,
 		           l.has_case AS has_case, l.triage AS triage, l.short_auto AS short_auto,
 		           multiIf(e.verdict != '', 'olay', l.has_case, 'vaka', l.triage != '', 'triyaj', '') AS src,
+		           if(e.verdict != '', toDate(e.created_at), toDate(l.case_at)) AS label_day,
 		           toInt8(multiIf(
 		             e.verdict = 'anomaly', 1,
 		             e.verdict = 'not_anomaly' AND e.reason IN ('expected', 'no_impact'), 2,
@@ -177,7 +178,8 @@ func mlScorecardSQL(withReason, withOrigin bool) string {
 		      countIf(src = 'olay' AND ok IN (0, 1) AND ev_origin = 'queue') AS queue_n,
 		      countIf(src = 'olay' AND ok = 1 AND ev_origin = 'queue')       AS queue_correct,
 		      quantileExactIfState(0.5)(toFloat64(label_s), ev_verdict != '') AS label_q,
-		      uniqExactIfState(ev_by, ev_verdict != '' AND ev_by != '')       AS labellers_u
+		      uniqExactIfState(ev_by, ev_verdict != '' AND ev_by != '')       AS labellers_u,
+		      uniqExactIfState(label_day, src IN ('olay', 'vaka') AND ok IN (0, 1)) AS days_u
 		    FROM lab
 		    GROUP BY detector, service
 		  )
@@ -188,6 +190,7 @@ func mlScorecardSQL(withReason, withOrigin bool) string {
 		  sum(triage_n), sum(triage_real), sum(queue_n), sum(queue_correct),
 		  toFloat64(quantileExactIfMerge(0.5)(label_q)) AS median_label_s,
 		  toUInt64(uniqExactIfMerge(labellers_u)) AS labellers,
+		  toUInt64(uniqExactIfMerge(days_u)) AS label_days,
 		  max(wrong) AS worst_svc_wrong, argMax(service, wrong) AS worst_svc
 		FROM per_svc
 		GROUP BY detector
@@ -220,7 +223,7 @@ func (s *Store) MLScorecard(ctx context.Context, since time.Time) ([]MLDetectorS
 			&c.ByVote, &c.ByCase, &c.CaseCorrect, &c.NotActionable,
 			&c.NoDeviation, &c.NoImpact, &c.Expected, &c.Other, &c.NoReason,
 			&c.TriageN, &c.TriageReal, &c.QueueN, &c.QueueCorrect,
-			&c.MedianLabelSec, &c.Labellers, &c.WorstSvcWrong, &c.WorstSvc); err != nil {
+			&c.MedianLabelSec, &c.Labellers, &c.LabelDays, &c.WorstSvcWrong, &c.WorstSvc); err != nil {
 			return nil, err
 		}
 		out = append(out, FinishMLDetectorScore(r.Detector, c))
@@ -236,7 +239,7 @@ type mlScoreCounts struct {
 	NoDeviation, NoImpact, Expected, Other, NoReason     uint64
 	TriageN, TriageReal, QueueN, QueueCorrect            uint64
 	MedianLabelSec                                       float64
-	Labellers, WorstSvcWrong                             uint64
+	Labellers, LabelDays, WorstSvcWrong                  uint64
 	WorstSvc                                             string
 }
 
@@ -257,6 +260,7 @@ func FinishMLDetectorScore(det string, c mlScoreCounts) MLDetectorScore {
 		Triage:    MLTriageCounts{N: i(c.TriageN), Real: i(c.TriageReal), Eligible: false},
 		Queue:     MLQueueCounts{N: i(c.QueueN), Correct: i(c.QueueCorrect)},
 		Labellers: i(c.Labellers),
+		LabelDays: i(c.LabelDays),
 		Exempt:    MLPrecisionExempt(det),
 	}
 	if c.N > 0 {

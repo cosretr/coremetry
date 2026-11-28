@@ -221,7 +221,7 @@ describe('/traces "Last ⇥" — ters kipte konum SONDAN yazılır (v0.10.831)',
 describe('/traces bayat ?s_traces-list — bilinmeyen kolon kimliği (v0.10.831)', () => {
   it('bilinmeyen kimlik yok sayılır; sayfa KENDİ sırasını gösterir', async () => {
     await mountTraces('/traces?s_traces-list=startTime.desc');
-    expect(activeHeader()).toEqual(['Start time:descending']);
+    expect(activeHeader()).toEqual(['Başlangıç:descending']); // v0.10.2486 — başlık katalogda (TR)
   });
 
   it('bilinmeyen kimlikle gelen sayfada da "Last ⇥" çalışır', async () => {
@@ -233,6 +233,6 @@ describe('/traces bayat ?s_traces-list — bilinmeyen kolon kimliği (v0.10.831)
 
   it('GEÇERLİ bir kimlik hâlâ kazanır (paylaşılan link bozulmadı)', async () => {
     await mountTraces('/traces?s_traces-list=duration.asc');
-    expect(activeHeader()).toEqual(['Duration:ascending']);
+    expect(activeHeader()).toEqual(['Süre:ascending']);
   });
 });

@@ -168,6 +168,7 @@ function logsWindowNs(useTimeRange: boolean, range: TimeRange, _refresh: number)
 
 function LogsInner() {
   'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const [searchParams, setSearchParams] = useSearchParams();
 
   // v0.9.1220 (Kibana dilim 3) — histogram kırılımı. URL tek kaynak
@@ -1543,7 +1544,7 @@ function LogsInner() {
           into a new (wider/shifted) window with a stale cursor silently
           drops every row newer than it from page 1. resetPaging mirrors
           the apply/reset/search/URL-sync handlers. (v0.7.81 fix) */}
-      <Topbar title="Logs" range={range} onRangeChange={(r) => { setRange(r); resetPaging(); }} envApplies />
+      <Topbar title={tn('nav.logs')} range={range} onRangeChange={(r) => { setRange(r); resetPaging(); }} envApplies />
       <PageShell>
         {/* v0.10.1498 (operatör onaylı taslak 2026-10-24, Kibana Discover) —
             sayfanın üst kısmı üç parça: (1) sorgu çubuğu (Service · Cluster ·

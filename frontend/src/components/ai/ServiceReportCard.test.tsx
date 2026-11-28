@@ -84,7 +84,7 @@ describe('ServiceReportCard', () => {
     render(p);
     const text = host.textContent ?? '';
     expect(text).toContain('Operasyonlar okunamadı (timeout)');
-    expect(text).toContain('Exceptions okunamadı');
+    expect(text).toContain('Hatalar okunamadı');
     expect(text).toContain('Servis RED okunamadı');
     expect(text).toContain('kırılan trace yok');
     expect(host.querySelectorAll('table')).toHaveLength(0);

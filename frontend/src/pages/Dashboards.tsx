@@ -18,6 +18,7 @@ import { tsLong, agoTR } from '@/lib/utils';
 import type { DashboardEditor, DashboardSummary } from '@/lib/types';
 import { PageControls } from '@/components/coremetry/PageControls';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { useT } from '@/lib/i18n';
 
 // STAR_PAGE (v0.9.780) — yıldızlar saved_views'te yaşıyor, YENİ ŞEMA YOK
 // (CLAUDE.md: kullanıcı-kaydı state için saved_views). Satır başına
@@ -71,6 +72,7 @@ interface ListParams { q: string; tags: string[]; fav: boolean }
 const LIST_PARAMS: ParamSpec<ListParams> = { q: strParam(), tags: csvParam(), fav: boolParam() };
 
 export default function DashboardsPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const { user } = useAuth();
   const navigate = useNavigate();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -228,7 +230,7 @@ export default function DashboardsPage() {
 
   return (
     <>
-      <Topbar title="Dashboards" />
+      <Topbar title={tn('nav.dashboards')} />
       <PageShell>
         {/* v0.10.1319 K1 — eylemler sağ kümede: ikincil (Import) primary'nin
             SOLUNDA, primary EN SAĞDA. */}

@@ -252,7 +252,7 @@ func problemSourceBreakdownSQL(bucketSec int64) string {
 // yanlış alarm, diğerleri doğru. ML karnesi (ml_precision.go) aynı ifadeyi
 // kullanır. Sınır: servis düzeyi Problem'in kimliği sabittir
 // (anomaly-auto:svc:<svc>) → vakayı yalnız servisin son Problem'i taşır.
-const problemCaseLabelSQL = `SELECT source_id, argMax(toString(category), confirmed_at) AS case_cat
+const problemCaseLabelSQL = `SELECT source_id, argMax(toString(category), confirmed_at) AS case_cat, max(confirmed_at) AS case_at
 		    FROM incident_cases FINAL
 		    WHERE source = 'problem' AND status = 'confirmed'
 		    GROUP BY source_id`

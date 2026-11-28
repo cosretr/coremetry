@@ -166,7 +166,7 @@ describe('AnomalyEventHost — durumlar', () => {
   it('yükleniyor: spinner, gövde yok', async () => {
     m.pendingIds.add('a1');
     const el = await mount();
-    expect(el.querySelector('[data-topbar]')?.textContent).toBe('Anomali');
+    expect(el.querySelector('[data-topbar]')?.textContent).toBe('Sinyal') // v0.10.2486 — Topbar page.signal;
     expect(el.textContent).not.toContain('normalin');
   });
   it('404 → "Anomali kaydı yok" + geri', async () => {

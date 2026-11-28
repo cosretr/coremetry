@@ -16,6 +16,7 @@ import {
 import type { HostRow, HostDetail, HostServiceRow, TimeRange } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { useT } from '@/lib/i18n';
 
 // v0.9.873 (tutarlılık denetimi BT12) — HostDrawer'ın servis tablosu.
 // Yoğun bir host'ta "CPU'yu kim yiyor" sorusu bugün göz taramasıyla
@@ -50,6 +51,7 @@ const HOST_COLS: ColumnDef<HostRow>[] = [
 ];
 
 export default function HostsPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const [range, setRange] = useUrlRange('15m');
   // Memoized on range identity — the v0.5.184 incident shape.
   const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
@@ -103,7 +105,7 @@ export default function HostsPage() {
 
   return (
     <>
-      <Topbar title="Hosts" range={range} onRangeChange={setRange} />
+      <Topbar title={tn('nav.hosts')} range={range} onRangeChange={setRange} />
       <PageShell>
         <div style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12 }}>
           Every host/pod that emitted metrics in the window — latest CPU and

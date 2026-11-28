@@ -314,7 +314,13 @@ func (t *Trace) pickPod(svc string) string {
 	if !ok || len(s.Pods) == 0 {
 		t.podOf[svc] = svc + "-1"
 	} else {
-		t.podOf[svc] = s.Pods[mrand.IntN(len(s.Pods))]
+		i := mrand.IntN(len(s.Pods))
+		// v0.10.2486 — K8s simülatörünün olay pod'u ready=0 iken trafik
+		// kardeşine gider (endpoints'ten çıkmış pod istek almaz).
+		if k8sPodNotReady(svc, s.Pods[i]) && len(s.Pods) > 1 {
+			i = (i + 1) % len(s.Pods)
+		}
+		t.podOf[svc] = s.Pods[i]
 	}
 	return t.podOf[svc]
 }
@@ -593,6 +599,7 @@ func (t *Trace) Send() error {
 			// Üç sinyalde de aynı (kaynak tutarlılığı, v0.8.383 ilkesi).
 			// v0.10.192 — namespace + işyükü kimliği + imaj (k8sWorkloadAttrs)
 			kvStr("k8s.cluster.name", clusterFor(s.Name)),
+			kvStr("openshift.cluster.name", clusterFor(s.Name)), // v0.10.2486 — prod OpenShift kaynak anahtarı
 			// v0.8.383 — per-INSTANCE environment, current semconv key
 			// only (see demoEnvs). Resource-level: every span this pod
 			// emits in this batch carries the same env.
@@ -691,7 +698,10 @@ type scenario func() *Trace
 // path of retail banking — highest weight in the driver.
 func scenarioBalanceInquiry() *Trace {
 	t := NewTrace()
-	totalDur := dur(40, 140)
+	base := dur(40, 140)
+	// v0.10.2486 — K8s simülatörünün OOM rampasındaki api-gateway pod'u bu
+	// uçta ~3× yavaşlar (yalnız gateway öz süresi; account-service değişmez).
+	totalDur := base + k8sSpanPenalty("api-gateway", t.pickPod("api-gateway"), "GET /api/v1/accounts/{id}/balance", base)
 	acct := acctID()
 	M.RecordHTTP("api-gateway", "GET", "/api/v1/accounts/{id}/balance", 200, ms(totalDur))
 	M.RecordDB("account-service", "oracle", "SELECT", ms(totalDur)*0.6)
@@ -707,7 +717,7 @@ func scenarioBalanceInquiry() *Trace {
 			"http.route", "/api/v1/accounts/{id}/balance", "http.status_code", 200,
 			"banking.account_id", acct), true, "")
 
-	acctDur := apiDur - 14*time.Millisecond
+	acctDur := base - 22*time.Millisecond
 	acctSpan := t.Add("account-service", "AccountService.GetBalance", tracepb.Span_SPAN_KIND_SERVER,
 		apiSpan, 8*time.Millisecond, acctDur, kv("rpc.system", "grpc", "rpc.method", "GetBalance",
 			"peer.service", "account-service", "banking.account_id", acct), true, "")
@@ -1437,6 +1447,7 @@ func sendLog(service string, severity int32, sevText, body string, traceID, span
 			// Üç sinyalde de aynı (kaynak tutarlılığı, v0.8.383 ilkesi).
 			// v0.10.192 — namespace + işyükü kimliği + imaj (k8sWorkloadAttrs)
 			kvStr("k8s.cluster.name", clusterFor(s.Name)),
+			kvStr("openshift.cluster.name", clusterFor(s.Name)), // v0.10.2486 — prod OpenShift kaynak anahtarı
 			// v0.8.383 — logs carry the pod's env too (resource-level
 			// coherence across signals; readies the Phase-4 log-env
 			// derive with real data).
@@ -1940,6 +1951,7 @@ func (m *metricsState) flush(startNs, nowNs uint64) []*metricspb.ResourceMetrics
 				// Üç sinyalde de aynı (kaynak tutarlılığı, v0.8.383 ilkesi).
 				// v0.10.192 — namespace + işyükü kimliği + imaj (k8sWorkloadAttrs)
 				kvStr("k8s.cluster.name", clusterFor(s.Name)),
+				kvStr("openshift.cluster.name", clusterFor(s.Name)), // v0.10.2486 — prod OpenShift kaynak anahtarı
 				// v0.8.383 — same per-instance env as the pod's spans.
 				kvStr("deployment.environment.name", envForPod(s, pod)),
 			}, k8sWorkloadAttrs(s)...)},
@@ -2041,6 +2053,9 @@ func main() {
 	// Drives the diurnal traffic curve, organic micro-spikes, and the
 	// transient incidents that make latency + error rate move together.
 	go L.run(ctx)
+
+	// v0.10.2486 — yalnız yerel: K8s metrik simülatörü (DEMO_K8S_METRICS_URL).
+	startK8sMetrics(ctx, &wg)
 
 	// ── Continuous CPU profiling ─────────────────────────────────────────────
 	// Capture a 5-second CPU profile every 10 seconds and push it.

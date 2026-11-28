@@ -167,9 +167,9 @@ describe('AlertProblemDetail — özet önce, ikincil bölümler kapalı (v0.10.
 
   it('kural adı ekranın üstünde İKİ KEZ basılmaz (özet zaten onunla başlıyor)', async () => {
     const el = await mountTech();
-    expect(sect(el, 'Root cause analysis')!.textContent).not.toContain('High error rate');
+    expect(sect(el, 'Kök neden analizi')!.textContent).not.toContain('High error rate');
     const anomaly = await (async () => { act(() => { root!.unmount(); }); host?.remove(); return mountTech(prob({ ruleId: 'anomaly:error_rate' })); })();
-    expect(sect(anomaly, 'Root cause analysis')!.textContent).toContain('ANOMALY');
+    expect(sect(anomaly, 'Kök neden analizi')!.textContent).toContain('SİNYAL');
     expect(anomaly.querySelector('.pd-title__text')?.textContent).toContain('olağan değer 5.00');
   });
 
@@ -182,22 +182,22 @@ describe('AlertProblemDetail — özet önce, ikincil bölümler kapalı (v0.10.
 
   it('Teknik kanıt açılınca kök neden, blast radius, correlated signals görünür; Metric kapalı ama yerinde', async () => {
     const el = await mountTech();
-    for (const t of ['Root cause analysis', 'Blast radius', 'Correlated signals']) {
+    for (const t of ['Kök neden analizi', 'Etki alanı', 'İlişkili sinyaller']) {
       const s = sect(el, t);
       expect(s, t).toBeTruthy();
       expect(toggleOf(s!), `${t} kapanır olmamalı`).toBeNull();
       expect(s!.querySelector(':scope > .b'), `${t} gövdesi görünür`).not.toBeNull();
     }
     expect(el.querySelector('[data-rcpanel]')).not.toBeNull();
-    const metric = sect(el, 'Metric')!;
+    const metric = sect(el, 'Metrik')!;
     expect(toggleOf(metric)?.getAttribute('aria-expanded')).toBe('false');
     act(() => { toggleOf(metric)!.click(); });
-    expect(sect(el, 'Metric')!.textContent).toContain('12.40');
+    expect(sect(el, 'Metrik')!.textContent).toContain('12.40');
   });
 
   it('zaman çizelgesi / Bildirim / Runbook / Description kapalı gelir ve kapalıyken mount edilmez', async () => {
     const el = await mountTech();
-    for (const t of ['Problem timeline', 'Bildirim', 'Runbook', 'Description']) {
+    for (const t of ['Problem zaman çizelgesi', 'Bildirim', 'Runbook', 'Açıklama']) {
       const s = sect(el, t);
       expect(s, `${t} silinmemeli`).toBeTruthy();
       expect(toggleOf(s!)?.getAttribute('aria-expanded'), t).toBe('false');
@@ -211,8 +211,8 @@ describe('AlertProblemDetail — özet önce, ikincil bölümler kapalı (v0.10.
     expect(el.querySelector('[data-notify]')).not.toBeNull();
     act(() => { toggleOf(sect(el, 'Runbook')!)!.click(); });
     expect(el.querySelector('[data-runbooks]')).not.toBeNull();
-    act(() => { toggleOf(sect(el, 'Description')!)!.click(); });
-    expect(sect(el, 'Description')!.textContent).toContain('Error rate above 5% for 5m');
+    act(() => { toggleOf(sect(el, 'Açıklama')!)!.click(); });
+    expect(sect(el, 'Açıklama')!.textContent).toContain('Error rate above 5% for 5m');
   });
 
   it('Log kanıtı bölümü kendi kapalı açıcısıyla yerinde (ikinci kapak yok)', async () => {
@@ -238,7 +238,7 @@ describe('AlertProblemDetail — terfi Problem\'i yinelenen (v0.10.1054)', () =>
     }));
     const when = el.querySelector('.pd-meta__when')?.textContent ?? '';
     expect(when).toMatch(/başladı · 20m · \d{2}:\d{2} bitti · yinelenen · bu 3\. kez · ilk kez \d{2}\.\d{2}\.\d{4} \d{2}:\d{2}$/);
-    expect(sect(el, 'Root cause analysis')!.textContent).not.toContain('Deploy correlation');
+    expect(sect(el, 'Kök neden analizi')!.textContent).not.toContain('Deploy correlation');
     // Yeni bölüm yok: başlıklar bugünkülerle aynı küme.
     expect(sects(el).some(s => /yinelen/i.test(s.querySelector(':scope > .h')?.textContent ?? ''))).toBe(false);
   });
@@ -249,16 +249,16 @@ describe('AlertProblemDetail — terfi Problem\'i yinelenen (v0.10.1054)', () =>
     episodeCount: 8, firstStartedAt: Date.now() * 1e6 - 7 * 86_400e9, ...over,
   });
   const timelineLis = async (el: HTMLElement) => {
-    const s = sect(el, 'Problem timeline')!;
+    const s = sect(el, 'Problem zaman çizelgesi')!;
     act(() => { toggleOf(s)!.click(); });
     await settle();
-    return [...sect(el, 'Problem timeline')!.querySelectorAll('li')].filter(li => li.textContent?.startsWith('Deploy'));
+    return [...sect(el, 'Problem zaman çizelgesi')!.querySelectorAll('li')].filter(li => li.textContent?.startsWith('Deploy'));
   };
   it('(b) warning, ölçüm yok: deploy kutusu yok; ne zaman ekinde ve zaman çizelgesinde NÖTR deploy', async () => {
     const el = await mountTech(ep8({ severity: 'warning', priorDeploy: PRIOR }));
     expect(el.querySelector('.pd-meta__when')?.textContent)
       .toMatch(/sürüyor · yinelenen · bu 8\. kez · ilk kez \S+ \S+ · deploy v2\.0\.0 10 dk önce \(öncesinde de görülüyordu\)$/);
-    expect(sect(el, 'Root cause analysis')!.textContent).not.toContain('Deploy correlation');
+    expect(sect(el, 'Kök neden analizi')!.textContent).not.toContain('Deploy correlation');
     const lis = await timelineLis(el);
     expect(lis).toHaveLength(1);
     expect(lis[0].className).toBe(''); // warn DEĞİL — nötr nokta
@@ -267,7 +267,7 @@ describe('AlertProblemDetail — terfi Problem\'i yinelenen (v0.10.1054)', () =>
   });
   it('(a) critical, ölçülen gerileme: sunucu deploy\'u yeniden olası neden yapar → deploy kutusu + warn satırı, nötr satır yok', async () => {
     const el = await mountTech(ep8({ recentDeploy: { version: 'v2.0.0', timeUnixNs: 1, ageSeconds: 600 } }));
-    expect(sect(el, 'Root cause analysis')!.textContent).toContain('Deploy correlation');
+    expect(sect(el, 'Kök neden analizi')!.textContent).toContain('Deploy correlation');
     expect(el.querySelector('.pd-meta__when')?.textContent).not.toContain('deploy v2.0.0');
     const lis = await timelineLis(el);
     expect(lis).toHaveLength(1);
@@ -281,7 +281,7 @@ describe('AlertProblemDetail — terfi Problem\'i yinelenen (v0.10.1054)', () =>
       recentDeploy: { version: 'v2.0.0', timeUnixNs: Date.now() * 1e6 - 25 * 60e9, ageSeconds: 600 },
     }));
     expect(el.querySelector('.pd-meta__when')?.textContent).toMatch(/sürüyor · yinelenen · bu 2\. kez · ilk kez /);
-    expect(sect(el, 'Root cause analysis')!.textContent).toContain('Deploy correlation');
+    expect(sect(el, 'Kök neden analizi')!.textContent).toContain('Deploy correlation');
   });
   it('alarm kuralı: alan gelse bile ne zaman satırı bugünkü gibi, deploy kutusu yerinde', async () => {
     const el = await mountTech(prob({
@@ -291,7 +291,7 @@ describe('AlertProblemDetail — terfi Problem\'i yinelenen (v0.10.1054)', () =>
     const when = el.querySelector('.pd-meta__when')?.textContent ?? '';
     expect(when).toMatch(/başladı · 15m · sürüyor$/);
     expect(when).not.toContain('yinelenen');
-    expect(sect(el, 'Root cause analysis')!.textContent).toContain('Deploy correlation');
+    expect(sect(el, 'Kök neden analizi')!.textContent).toContain('Deploy correlation');
   });
 });
 
@@ -396,21 +396,21 @@ describe('AlertProblemDetail — terfi / küme Problem\'inde ANOMALY rozeti (v0.
     ['küme', 'anomaly-cluster:checkout', 'Correlated incident rooted at checkout — 3 services degraded together'],
   ])('%s: rozet var, Description yerinde ve açılınca metni taşır', async (_n, ruleId, desc) => {
     const el = await mountTech(prob({ ruleId, ruleName: 'Anomaly · nightly-job', metric: 'anomaly_ratio', value: 5, threshold: 3, description: desc }));
-    expect(sect(el, 'Root cause analysis')!.textContent).toContain('ANOMALY');
+    expect(sect(el, 'Kök neden analizi')!.textContent).toContain('SİNYAL') // v0.10.2486 — rozet tek adla;
     expect(el.querySelector('.pd-title__text')?.textContent).toContain('eşik 3.00');
-    const d = sect(el, 'Description');
+    const d = sect(el, 'Açıklama');
     expect(d, 'Description silinmemeli').toBeTruthy();
     act(() => { toggleOf(d!)!.click(); });
-    expect(sect(el, 'Description')!.textContent).toContain(desc);
+    expect(sect(el, 'Açıklama')!.textContent).toContain(desc);
   });
   it('"anomaly:" dedektörü: rozet var, Description bugünkü gibi gizli', async () => {
     const el = await mountTech(prob({ ruleId: 'anomaly:checkout:p99_ms', description: 'p99 on checkout — current 900 vs baseline 300' }));
-    expect(sect(el, 'Root cause analysis')!.textContent).toContain('ANOMALY');
-    expect(sect(el, 'Description')).toBeUndefined();
+    expect(sect(el, 'Kök neden analizi')!.textContent).toContain('SİNYAL');
+    expect(sect(el, 'Açıklama')).toBeUndefined();
   });
   it('alarm kuralı: rozet yok', async () => {
     const el = await mountTech();
-    expect(sect(el, 'Root cause analysis')!.textContent).not.toContain('ANOMALY');
+    expect(sect(el, 'Kök neden analizi')!.textContent).not.toContain('SİNYAL');
   });
 });
 
@@ -435,7 +435,7 @@ describe('AlertProblemDetail — tetiklenen metriğin grafiği (v0.10.1064)', ()
   ] as const)('%s: grafik yok, sayfa aynı', async (_n, over) => {
     const el = await mountTech(prob(over as Partial<Problem>));
     expect(el.querySelector('[data-alert-chart]')).toBeNull();
-    expect(sect(el, 'Root cause analysis')).toBeTruthy();
+    expect(sect(el, 'Kök neden analizi')).toBeTruthy();
   });
 });
 
@@ -473,7 +473,7 @@ describe('AlertProblemDetail — dört kutu + Teknik kanıt kapalı (v0.10.2127,
   });
   it('Kısa geçmiş sağda ve açık; Teknik kanıt açılınca kural tanımı gelir', async () => {
     const el = await mount();
-    expect(sect(el, 'Kısa geçmiş')!.textContent).toContain('Detected');
+    expect(sect(el, 'Kısa geçmiş')!.textContent).toContain('Tespit edildi');
     const tech = sect(el, 'Teknik kanıt')!;
     act(() => { toggleOf(tech)!.click(); });
     await settle();

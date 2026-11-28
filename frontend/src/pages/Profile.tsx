@@ -15,6 +15,7 @@ import { tsLong, fmtNum } from '@/lib/utils';
 import { diffFlame } from '@/lib/flameDiff';
 import type { ProfileDetail, ProfileRow } from '@/lib/types';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { useT } from '@/lib/i18n';
 
 // /profile renders one profile's flamegraph by default. When
 // the URL carries `?baseline=<id>` we fetch a second profile,
@@ -46,6 +47,7 @@ const BASELINE_COLS: ColumnDef<ProfileRow>[] = [
 ];
 
 function ProfileDetailInner() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const id = searchParams.get('id') ?? '';
@@ -143,7 +145,7 @@ function ProfileDetailInner() {
 
   return (
     <>
-      <Topbar title="Profile" />
+      <Topbar title={tn('page.profile')} />
       <PageShell>
         <div style={{ marginBottom: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <Button variant="secondary" onClick={() => navigate(-1)}>← Back</Button>

@@ -118,7 +118,7 @@ const COLS_V2 = (lang: Lang): ColumnDef<WorkloadRollout>[] => COLS(lang).flatMap
   : c.id === 'revision' ? [c, { id: 'gen', label: t('ro.col.gen', lang), width: 130, minWidth: 96, numeric: true, priority: 3 }]
   : [c]);
 
-const ROLLOUTS_PAGE_TITLE = 'Deployment/Rollouts';
+// v0.10.2486 dilim 2 — sayfa adı menüyle tek anahtar (nav.rollouts: Değişiklikler / Changes).
 
 export default function RolloutsPage() {
   const lang = useLang();
@@ -208,7 +208,7 @@ export default function RolloutsPage() {
   };
   return (
     <>
-      <Topbar title={ROLLOUTS_PAGE_TITLE} range={range} onRangeChange={setRange} />
+      <Topbar title={t('nav.rollouts', lang)} range={range} onRangeChange={setRange} />
       <PageShell>
         <TabStrip ariaLabel={t('ro.tabs', lang)} value={tab} onChange={k => setParam('tab', k === 'live' ? '' : k)} style={{ marginBottom: 10 }}
           tabs={[{ key: 'live', label: t('ro.tab.live', lang) }, { key: 'stats', label: t('ro.tab.stats', lang) }]} />
@@ -257,7 +257,7 @@ export default function RolloutsPage() {
             onSaved={() => qc.invalidateQueries({ queryKey: keys.rollouts.all })} />
         )}
         {disabled ? (
-          <Empty icon="—" title={tf('ro.off.title', lang, { t: ROLLOUTS_PAGE_TITLE })}
+          <Empty icon="—" title={tf('ro.off.title', lang, { t: t('nav.rollouts', lang) })}
             action={isAdmin ? <Button variant="primary" size="sm" loading={enabling} onClick={() => void enable()}>{t('ro.enable', lang)}</Button> : undefined}>
             {/* v0.10.984 — Ayarlar'da Rollouts sekmesi yok (v2-audit §2.6 madde 5): gerçek yol bu sayfadaki düğme. */}
             {t('ro.off.body', lang)} {isAdmin ? (enableErr ? tf('ro.off.err', lang, { e: enableErr }) : t('ro.off.keep', lang)) : t('ro.off.viewer', lang)}

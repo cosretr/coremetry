@@ -16,6 +16,7 @@ import { buildWatcherTimeline, summarizeWatcherHistory, type WatcherTimelineEntr
 import { WatcherImportModal } from './alerts/WatcherImportModal';
 import { PageControls } from '@/components/coremetry/PageControls';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { useT } from '@/lib/i18n';
 import { TriageStatusBadge } from '@/features/anomalies/statusTone'; // v0.10.929 (K5) — tek durum sözlüğü (hafif yaprak)
 
 // /watchers (v0.9.196) — dedicated surface for the imported ES
@@ -68,6 +69,7 @@ function watchIndices(watcherJson?: string): string {
 }
 
 export default function WatchersPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const { user } = useAuth();
   const canEdit = user?.role === 'admin' || user?.role === 'editor';
   // v0.9.197 — satırdan hızlı enable/disable (300 watcher'da Alerts'e
@@ -129,7 +131,7 @@ export default function WatchersPage() {
 
   return (
     <>
-      <Topbar title="Watchers" />
+      <Topbar title={tn('nav.watchers')} />
       <PageShell>
         <PageControls sticky style={{ marginBottom: 14 }}>
           <span style={{ color: 'var(--text2)', fontSize: 12 }}>

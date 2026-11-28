@@ -173,18 +173,19 @@ function ProblemOffenders({ problem }: { problem: Problem }) {
     staleTime: 60_000,
   });
   const rows = useMemo(() => topOffenders(opsQ.data ?? []), [opsQ.data]);
+  const lang = useLang();
   return (
-    <Sect title="Top offenders" sub="problem window · total time">
+    <Sect title={tl('probD.off.title', lang)} sub={tl('probD.off.sub', lang)}>
       {opsQ.isPending && <Spinner />}
       {/* Hata dalı AYRI: boşa ezmek "bu pencerede operasyon yok" diye
           okunur ve operatör yanlış yerde arar (K6 sınıfı). */}
       {opsQ.isError && (
         <div style={{ fontSize: 12, color: 'var(--err)' }}>
-          Operations could not be loaded — this is a failed read, not an idle service.
+          {tl('probD.off.err', lang)}
         </div>
       )}
       {opsQ.data && rows.length === 0 && (
-        <Empty compact icon="◯" title="No operations in the problem window" />
+        <Empty compact icon="◯" title={tl('probD.off.empty', lang)} />
       )}
       {/* v0.10.945 — statik tablo (T1): en ağır 5 operasyon (topOffenders), sabit sıra; sıralanmaz. */}
       {rows.length > 0 && (
@@ -192,10 +193,10 @@ function ProblemOffenders({ problem }: { problem: Problem }) {
           <colgroup><col /><col style={{ width: 72 }} /><col style={{ width: 80 }} /><col style={{ width: 76 }} /></colgroup>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left' }}>Operation</th>
-              <th className="num">Calls</th>
+              <th style={{ textAlign: 'left' }}>{tl('probD.col.op', lang)}</th>
+              <th className="num">{tl('probD.col.calls', lang)}</th>
               <th className="num">P99</th>
-              <th className="num">Err %</th>
+              <th className="num">{tl('probD.col.errPct', lang)}</th>
             </tr>
           </thead>
           <tbody>
@@ -274,7 +275,9 @@ function TeamChips({ service }: { service: string }) {
   if (!ug && !sy) return null;
   return (
     <>
+      {/* i18n-exempt: team role codes (ug/sy) */}
       {ug && <span className="chip"><span className="k">ug-team</span><b className="mono">{ug}</b></span>}
+      {/* i18n-exempt: team role codes (ug/sy) */}
       {sy && <span className="chip"><span className="k">sy-team</span><b className="mono">{sy}</b></span>}
     </>
   );
@@ -311,11 +314,13 @@ function ProblemTeamChips({ problem }: { problem: Problem }) {
     <>
       {ug && (
         <span className="pb-pill" title={title}>
+          {/* i18n-exempt: team role code */}
           <span className="dot" /> ug <span className="mono">{mark}{ug}</span>
         </span>
       )}
       {sy && (
         <span className="pb-pill" title={title}>
+          {/* i18n-exempt: team role code */}
           <span className="dot" /> sy <span className="mono">{mark}{sy}</span>
         </span>
       )}
@@ -604,30 +609,30 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
       {/* Detail bar */}
       <div className="rb-bar">
         <Button variant="secondary" onClick={onBack} leftIcon={<ArrowLeft size={14} strokeWidth={1.75} />}>
-          Problems
+          {tl('nav.problems', lang)}
         </Button>
         <TriageStatusBadge s={state} label={STATE_LABEL[state]} />
         {ora && <Badge tone="info" title={tl('exc.ora.title', lang)}>{oraLabel}</Badge>}
-        <span className="badge b-gray">{group.occurrences.toLocaleString()} occurrences</span>
+        <span className="badge b-gray">{tf('probD.occurrences', lang, { n: group.occurrences.toLocaleString() })}</span>
         <span className="spacer" />
-        <ShareButton copiedLabel="Copied" />
+        <ShareButton copiedLabel={tl('exc.trace.copied', lang)} />
         {isAdmin && (state === 'new' || state === 'regressed' || state === 'acknowledged') && (
           <>
             {state !== 'acknowledged' && <Button variant="secondary" onClick={() => act('acknowledged')}
-              loading={acting === 'acknowledged'} disabled={acting !== null}>Acknowledge</Button>}
+              loading={acting === 'acknowledged'} disabled={acting !== null}>{tl('probD.ack', lang)}</Button>}
             {/* v0.10.1323 — Exceptions tablosunun satır eylem kolonu kalktı; oradaki
                 acknowledged → new "Reopen" (ack'i geri al) yalnız satırdaydı, artık burada. */}
             {state === 'acknowledged' && <Button variant="secondary" onClick={() => act('new')}
-              loading={acting === 'new'} disabled={acting !== null}>Reopen</Button>}
+              loading={acting === 'new'} disabled={acting !== null}>{tl('probD.reopen', lang)}</Button>}
             <Button variant="secondary" onClick={() => act('ignored')}
-              loading={acting === 'ignored'} disabled={acting !== null}>Ignore</Button>
+              loading={acting === 'ignored'} disabled={acting !== null}>{tl('probD.ignore', lang)}</Button>
             <Button variant="primary" onClick={() => act('resolved')}
-              loading={acting === 'resolved'} disabled={acting !== null}>Resolve</Button>
+              loading={acting === 'resolved'} disabled={acting !== null}>{tl('probD.resolve', lang)}</Button>
           </>
         )}
         {isAdmin && (state === 'resolved' || state === 'ignored') && (
           <Button variant="secondary" onClick={() => act('new')}
-            loading={acting === 'new'} disabled={acting !== null}>Reopen</Button>
+            loading={acting === 'new'} disabled={acting !== null}>{tl('probD.reopen', lang)}</Button>
         )}
       </div>
 
@@ -668,13 +673,13 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
         {ora && isSyntheticOracleService(group.service) ? (
           // v0.10.1092 — servisi çözülemeyen Oracle grubu: sentetik ad, link yok.
           <span className="chip" title={tl('exc.svc.unresolved', lang)}>
-            <span className="k">service</span><b className="mono">{group.service}</b>
+            <span className="k">{tl('probD.chip.service', lang)}</span><b className="mono">{group.service}</b>
           </span>
         ) : (
           <Link to={serviceHref(group.service, { range: { fromNs: group.firstSeen, toNs: group.lastSeen } })}
             className="chip" style={{ textDecoration: 'none' }}
             title={tl('exc.svc.open', lang)}>
-            <span className="k">service</span><b className="mono" style={{ color: 'var(--accent2)' }}>{group.service}</b>
+            <span className="k">{tl('probD.chip.service', lang)}</span><b className="mono" style={{ color: 'var(--accent2)' }}>{group.service}</b>
           </Link>
         )}
         {ora && group.message && (
@@ -733,8 +738,8 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
           group's whole window (v0.8.309). */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="ov-card-h">
-          <h3>Occurrences over time</h3>
-          <span className="ov-sub">{group.occurrences.toLocaleString()} total</span>
+          <h3>{tl('probD.occ.title', lang)}</h3>
+          <span className="ov-sub">{tf('probD.occ.total', lang, { n: group.occurrences.toLocaleString() })}</span>
         </div>
         <div className="ov-card-b">
           {occ.length === 0 ? (
@@ -743,11 +748,11 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
                okunuyordu. */
             occQ.isError ? (
               <QueryErrorInline
-                text={`Occurrence series could not be loaded${occQ.error instanceof Error ? ` — ${occQ.error.message}` : ''}`}
+                text={tf('probD.occ.err', lang, { detail: occQ.error instanceof Error ? ` — ${occQ.error.message}` : '' })}
                 onRetry={() => occQ.refetch()} />
             ) : (
               <div style={{ color: 'var(--text3)', fontSize: 12 }}>
-                {occQ.isLoading ? 'Loading…' : 'No occurrences to chart.'}
+                {occQ.isLoading ? tl('probD.loading', lang) : tl('probD.occ.empty', lang)}
               </div>
             )
           ) : (
@@ -776,11 +781,11 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
         {ora ? <OracleGroupPanel group={group} samples={samples} /> : (
         <div className="card" style={{ minWidth: 0 }}>
           <div className="ov-card-h">
-            <h3>Stack trace</h3>
-            <span className="ov-sub">representative sample{stackLines.length > 0 ? ` · ${tf('exc.stack.lines', lang, { n: stackLines.length })}` : ''}{linkRef}</span>
+            <h3>{tl('probD.stack', lang)}</h3>
+            <span className="ov-sub">{tl('probD.stack.sub', lang)}{stackLines.length > 0 ? ` · ${tf('exc.stack.lines', lang, { n: stackLines.length })}` : ''}{linkRef}</span>
             <span className="ov-right">
               <Button variant="secondary" size="sm" onClick={copyStack} disabled={!stack}>
-                {copied ? 'Copied' : 'Copy'}
+                {copied ? tl('exc.trace.copied', lang) : tl('probD.copy', lang)}
               </Button>
             </span>
           </div>
@@ -794,13 +799,13 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
                  "No sample traces." olarak sunuluyordu. */
               samplesQ.isError ? (
                 <QueryErrorInline
-                  text={`Samples could not be loaded${samplesQ.error instanceof Error ? ` — ${samplesQ.error.message}` : ''}`}
+                  text={tf('probD.samples.err', lang, { detail: samplesQ.error instanceof Error ? ` — ${samplesQ.error.message}` : '' })}
                   onRetry={() => samplesQ.refetch()} />
               ) : (
                 <div style={{ color: samples.length === 0 && emptyNote.warn ? 'var(--warn)' : 'var(--text3)', fontSize: 12 }}>
-                  {samplesQ.isLoading ? 'Loading…'
+                  {samplesQ.isLoading ? tl('probD.loading', lang)
                     : samples.length === 0 ? emptyNote.text
-                    : 'No stack trace on the sampled occurrences.'}
+                    : tl('probD.stack.none', lang)}
                 </div>
               )
             ) : (
@@ -837,7 +842,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
         {!ora && <ExceptionPodsPanel fingerprint={group.fingerprint} service={group.service} groupOccurrences={group.occurrences} />}
         {/* Sample traces */}
         <div className="card" style={{ minWidth: 0 }}>
-          <div className="ov-card-h"><h3>Sample traces</h3>{samples.length > 0 && <span className="ov-sub">{Math.min(samples.length, 14)}{samples.length > 14 ? ` / ${samples.length}` : ''}</span>}</div>
+          <div className="ov-card-h"><h3>{tl('probD.samples', lang)}</h3>{samples.length > 0 && <span className="ov-sub">{Math.min(samples.length, 14)}{samples.length > 14 ? ` / ${samples.length}` : ''}</span>}</div>
           <div className="table-wrap">
             {/* v0.10.945 — statik tablo (T1): başlıksız kompakt örnek listesi, en çok 14 satır,
                 sıra sunucunun; DataTable'a göç başlık satırı ekler (görsel), bu dilimde değil.
@@ -909,7 +914,7 @@ function ProblemTriage({ problem, isAdmin, onBack, onChanged }: {
   const me = claimIdentity(user);
   const claimed = !!me && assignee === me && problem.status !== 'open';
   const canClaim = isAdmin && !!me && problem.status !== 'resolved' && !claimed;
-  const run = async (kind: 'claim' | 'assign', fn: () => Promise<unknown>) => {
+  const run = async (kind: 'claim' | 'assign', fn: () => Promise<unknown>) => { // i18n-exempt: type parameter, not text
     setBusy(kind); setErr(null);
     try {
       await fn();
@@ -976,13 +981,13 @@ function ProblemTimelineList({ problem, rollouts, limit, kind }: {
   const items: ReactElement[] = [
     ...rollouts.map(ev => (
       <li key={`${ev.clusterId}/${ev.namespace}/${ev.workload}@${ev.revision}`} className={ev.band === 'high' ? 'warn' : ''}>
-        <b>Rollout</b>{' '}
+        <b>{tl('probD.tl.rollout', lang)}</b>{' '}
         <Link to={rolloutEvidenceHref(ev)} className="mono" title={ev.reason}>
           {ev.namespace}/{ev.workload}{ev.imageTag ? ` → ${ev.imageTag}` : ''}
         </Link>
         {/* v0.10.922 (sade palet adım 1) — POD bir eşleşme TÜRÜ (kategori),
             sapma değil: nötr. Satırın önemi zaten li.warn noktasında. */}
-        {ev.matchedBy === 'pod' && <span className="badge b-gray pd-tl-tag">POD</span>}
+        {ev.matchedBy === 'pod' && <span className="badge b-gray pd-tl-tag">{tl('probD.tl.pod', lang)}</span>}
         <span className="mono pd-tl-ts">{fmtStartedTs(ev.startedAtNs)}</span>
       </li>
     )),
@@ -990,7 +995,7 @@ function ProblemTimelineList({ problem, rollouts, limit, kind }: {
   if (problem.recentDeploy) {
     items.push(
       <li key="deploy" className="warn">
-        <b>Deploy</b> <code className="mono">{problem.recentDeploy.version}</code>
+        <b>{tl('probD.tl.deploy', lang)}</b> <code className="mono">{problem.recentDeploy.version}</code>
         <span className="mono pd-tl-ts">{fmtStartedTs(problem.startedAt - problem.recentDeploy.ageSeconds * 1e9)}</span>
       </li>,
     );
@@ -998,21 +1003,21 @@ function ProblemTimelineList({ problem, rollouts, limit, kind }: {
     // v0.10.1054 — yinelenen kuralın "olası neden" saymadığı deploy NÖTR kalır.
     items.push(
       <li key="prior-deploy" data-prior-deploy title={tl('pd.tl.priorDeploy', lang)}>
-        <b>Deploy</b> <code className="mono">{problem.priorDeploy.version}</code>
+        <b>{tl('probD.tl.deploy', lang)}</b> <code className="mono">{problem.priorDeploy.version}</code>
         <span className="mono pd-tl-ts">{fmtStartedTs(problem.startedAt - problem.priorDeploy.ageSeconds * 1e9)}</span>
       </li>,
     );
   }
   items.push(
     <li key="detected" className="err">
-      <b>Detected</b> — {titleV.orig ? <OrigLang>{titleV.text}</OrigLang> : titleV.text}
+      <b>{tl('probD.tl.detected', lang)}</b> — {titleV.orig ? <OrigLang>{titleV.text}</OrigLang> : titleV.text}
       <span className="mono pd-tl-ts">{fmtStartedTs(problem.startedAt)}</span>
     </li>,
   );
   if (problem.status === 'resolved' && problem.resolvedAt) {
     items.push(
       <li key="resolved" className="ok">
-        <b>Resolved</b>
+        <b>{tl('probD.tl.resolved', lang)}</b>
         <span className="mono pd-tl-ts">{fmtStartedTs(problem.resolvedAt)}</span>
       </li>,
     );
@@ -1062,12 +1067,12 @@ function AlertDetailBoxes({ problem, std, window: win, dbHealthLinks, svcSlowLin
         {dbHealthLinks ? (<>
           <SignalLink to={dbHealthLinks.databaseHref} label={tl('pd.box.dbPage', lang)} sub={tl('pd.box.window', lang)} />
           <SignalLink to={dbHealthLinks.errorTracesHref} label={tl('pd.box.dbErrTraces', lang)} sub={tl('pd.box.dbErrTraces.sub', lang)} />
-        </>) : lag ? (<>
+        </>) /* i18n-exempt: ternary chain, not text */ : lag ? (<>
           <SignalLink to={lag.messagingHref} label={tl('pd.box.messaging', lang)}
             sub={std?.lag?.topic ? tf('pd.box.messaging.sub', lang, { t: std.lag.topic }) : tl('pd.box.window', lang)} />
           {lag.chartHref && <SignalLink to={lag.chartHref} label={tl('pd.box.lagChart', lang)} sub={tl('pd.box.lagChart.sub', lang)} />}
           <SignalLink to={serviceHref(problem.service, { range: win })} label={tl('pd.box.svcPage', lang)} sub={tl('pd.box.svcPage.sub', lang)} />
-        </>) : kind === 'service' ? (<>
+        </>) /* i18n-exempt: ternary chain, not text */ : kind === 'service' ? (<>
           {svcSlowLinks
             ? <SignalLink to={svcSlowLinks.slowTracesHref} label={tl('pd.box.slow', lang)} sub={tf('pd.box.slow.sub', lang, { ms: Math.round(svcSlowLinks.slowMinMs) })} />
             : thr !== null
@@ -1083,7 +1088,7 @@ function AlertDetailBoxes({ problem, std, window: win, dbHealthLinks, svcSlowLin
           </div>
         )}
         {problem.runbookUrl && (
-          <SafeHref href={problem.runbookUrl} className="pd-act-link">Runbook ↗</SafeHref>
+          <SafeHref href={problem.runbookUrl} className="pd-act-link">{tl('probD.runbookLink', lang)}</SafeHref>
         )}
         <div className="pd-act-row">
           <AIExplainButton subject={{ kind: 'problem', id: problem.id }}
@@ -1180,7 +1185,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
     <PageShell>
       <div className="rb-bar">
         <Button variant="secondary" onClick={onBack} leftIcon={<ArrowLeft size={14} strokeWidth={1.75} />}>
-          Problems
+          {tl('nav.inbox', lang)}
         </Button>
         {/* v0.10.922 (sade palet adım 1) — şiddet nötr kelime, durum tek ton
             sözlüğünden (TriageStatusBadge). v0.10.2126 (S6) — öncelik
@@ -1199,7 +1204,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
         )}
         <span className="badge b-gray mono">{problem.id.slice(0, 12)}</span>
         <span className="spacer" />
-        <ShareButton copiedLabel="Copied" />
+        <ShareButton copiedLabel={tl('exc.trace.copied', lang)} />
       </div>
 
       {/* v0.10.2126 (Problems sadeleştirme S6; mockup onayı 2026-11-13) —
@@ -1294,7 +1299,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
         </Sect>
         <div className="pd-cols pd-cols-15">
           <div className="pd-col">
-              <Sect title="Root cause analysis" accent>
+              <Sect title={tl('probD.rca', lang)} accent>
                 {/* v0.10.1032 (inceleme) — kural adı satırı KALKTI: hemen üstteki
                     özet cümlesi kural adıyla başlıyor (ad boşsa metrikle), yani
                     satır ekranın üstünde saf bir tekrardı. ANOMALY tür etiketi
@@ -1303,7 +1308,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                   <div style={{ fontSize: 13, marginBottom: 8 }}>
                     {/* v0.10.922 (sade palet adım 1) — ANOMALY bir tür etiketi
                         (üst veri), mavi değil nötr. */}
-                    <span className="badge b-gray">ANOMALY</span>
+                    <span className="badge b-gray">{tl('probD.anomaly', lang)}</span>
                     {/* v0.10.2053 (D4) — ML grubunun açtığı Problem: gruba geri bağlantı. */}
                     {mlGroupHref && (
                       <Link to={mlGroupHref} style={{ marginLeft: 8 }} data-testid="pd-ml-group">{tl('pd.mlGroup', lang)}</Link>
@@ -1345,7 +1350,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                       bloğuyla şişiyordu. */}
                   {/* v0.10.2127 (S7) — "CoSRE'ye sor" yukarıdaki "Ne yapılabilir" kutusunda. */}
                   <AIExplainButton subject={{ kind: 'runbook', id: problem.id }}
-                    label={<><IconSparkles /> <span>Runbook AI</span></>} />
+                    label={<><IconSparkles /> <span>{tl('probD.runbookAi', lang)}</span></>} />
                 </div>
               </Sect>
 
@@ -1359,11 +1364,11 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
 
               {/* v0.10.1032 (inceleme) — kapalı gelir: özet cümlesi değeri ve
                   eşiği zaten söylüyor; açınca öncelik gerekçesiyle aynı blok. */}
-              <Sect title="Metric" collapsible sub={<span className="mono">{problem.metric}</span>}>
+              <Sect title={tl('probD.metric', lang)} collapsible sub={<span className="mono">{problem.metric}</span>}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
                   <span className="pb-headline" style={{ fontSize: 24 }}>{problem.value.toFixed(2)}</span>
                   <span className="mono" style={{ color: 'var(--text3)', fontSize: 13 }}>
-                    / threshold {fmtFixed(problem.threshold, 2)}
+                    {tf('probD.threshold', lang, { v: fmtFixed(problem.threshold, 2) })}
                   </span>
                 </div>
                 {problem.priorityReason && (
@@ -1377,12 +1382,12 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
 
               {/* v0.10.1032 — ikincil: kapalı gelir (istek atmaz — rollout
                   işaretleri RootCausePanel'in zaten yaptığı okumadan gelir). */}
-              <Sect title="Problem timeline" collapsible>
+              <Sect title={tl('probD.timeline', lang)} collapsible>
                 <ProblemTimelineList problem={problem} rollouts={rcRollouts} kind={std?.kind} />
               </Sect>
           </div>
           <div className="pd-col">
-              <Sect title="Blast radius">
+              <Sect title={tl('probD.blast', lang)}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {/* v0.9.860 (UX denetimi K1) — triage yolculuğunun BELKEMİĞİ.
                       Gece 03:14 alarmının "Blast radius" pill'i servis sayfasını
@@ -1425,6 +1430,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                         className="pb-pill"
                         style={{ textDecoration: 'none', color: 'var(--accent2)' }}
                         title={tl('pd.pod.title', lang)}>
+                        {/* i18n-exempt: entity kind term (pod) */}
                         <span className="dot" /> pod <span className="mono">{pod}</span> →
                       </Link>
                     );
@@ -1439,7 +1445,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                 </div>
               </Sect>
 
-              <Sect title="Correlated signals">
+              <Sect title={tl('probD.corr', lang)}>
                 {/* v0.10.1106 — terfi Problem'inin log deseni kaynağı: desene uyan
                     satırlarla /logs (olay detayının "Logları aç"ı; özne dalından
                     bağımsız — servissiz desen olayında da). Diğerlerinde null. */}
@@ -1464,7 +1470,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                   {/* v0.10.1083 — hata sayısı kolu (ORA patlaması): hangi hata kodu,
                       hangi çağıran — Databases detayının hata kartı. */}
                   <SignalLink to={dbHealthLinks.errorsHref} label={tl('pd.sig.dbErrors', lang)} sub={tl('pd.sig.dbErrors.sub', lang)} />
-                </>) : subjectKind(problem.service, problem.kind) !== 'service' ? (
+                </>) /* i18n-exempt: ternary chain, not text */ : subjectKind(problem.service, problem.kind) !== 'service' ? (
                   <div style={{ fontSize: 12, color: 'var(--text3)' }}>
                     {tl(isExternal ? 'pd.sig.extNote' : 'pd.sig.dbNote', lang)}
                   </div>
@@ -1477,8 +1483,8 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                   <SignalLink to={svcSlowLinks.slowTracesHref} label={tl('pd.sig.slow', lang)}
                     sub={tf('pd.sig.slow.sub', lang, { ms: Math.round(svcSlowLinks.slowMinMs) })} />
                 </>)}
-                <SignalLink to={logsLink} label="≡ Logs" sub="service, problem window" />
-                <SignalLink to={logsErrorLink} label={tl('pd.sig.logsErr', lang)} sub="service, problem window, severity ≥ ERROR" />
+                <SignalLink to={logsLink} label={tl('probD.sig.logs', lang)} sub={tl('pd.box.svcWindow', lang)} />
+                <SignalLink to={logsErrorLink} label={tl('pd.sig.logsErr', lang)} sub={tl('probD.sig.logsErr.sub', lang)} />
                 <SignalLink to={logsPatternsLink} label={tl('pd.sig.logsPat', lang)} sub={tl('pd.sig.logsPat.sub', lang)} />
                 {/* v0.8.512 (perf raporu #12) — pivot problem penceresini
                     taşır: logs ile aynı custom range, yoksa /traces global
@@ -1496,7 +1502,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                 <SignalLink to={tracesPivotHref({
                   window: probWindow, service: problem.service,
                   hasError: true, rootOnly: false,
-                })} label="⋮ Error traces" sub="service, problem window" />
+                })} label={tl('pd.sig.dbErrTraces', lang)} sub={tl('pd.box.svcWindow', lang)} />
                 {/* v0.9.961 (UX denetimi G4/Ö7) — GECİKME alarmının kendi
                     pivotu. Tek trace linki `hasError=true` sabitliydi ve bir
                     p99-eşik alarmında yavaşlık çoğu zaman HATASIZ span'lerde
@@ -1515,12 +1521,12 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                     // çalışıyordu ama ad yalan söylüyordu.
                     <SignalLink
                       to={slowTracesHref(problem.service, thr, probWindow)}
-                      label="◷ Slow traces"
+                      label={tl('pd.sig.slow', lang)}
                       sub={tf('pd.sig.slowThr.sub', lang, { ms: Math.round(thr) })} />
                   );
                 })()}
                 <SignalLink to={`/service-map?focus=${encodeURIComponent(problem.service)}`}
-                  label="◉ Service map" sub="focused" />
+                  label={tl('probD.sig.map', lang)} sub={tl('probD.sig.map.sub', lang)} />
                 </>)}
               </Sect>
 
@@ -1549,7 +1555,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
 
               {/* v0.10.1032 — ikincil, KAPALI gelir; runbook koşuları
                   (useRunbookExecutions) bölüm açılınca çekilir. */}
-              <Sect title="Runbook" collapsible
+              <Sect title={tl('probD.runbook', lang)} collapsible
                 sub={problem.runbookUrl ? tl('pd.runbook.sub', lang) : undefined}>
                 {problem.runbookUrl && (
                   <SafeHref href={problem.runbookUrl}
@@ -1559,7 +1565,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                       background: 'var(--accent-soft)', border: '1px solid var(--accent)',
                       color: 'var(--accent2)', textDecoration: 'none',
                     }}>
-                    Runbook ↗
+                    {tl('probD.runbookLink', lang)}
                   </SafeHref>
                 )}
                 {/* Problem→Runbook bridge: run an operational runbook against this
@@ -1572,7 +1578,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                   tepe oranı / sayı) ve kümenin üye listesi sayfadaki tek insan-okur
                   metin — rozet gelince kaybolmamalı. */}
               {problem.description && !isAnomalyDetectorRule(problem.ruleId) && (
-                <Sect title="Description" collapsible>
+                <Sect title={tl('probD.desc', lang)} collapsible>
                   <pre className="mono" style={{
                     margin: 0, fontSize: 11.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
                     color: 'var(--text2)', background: 'var(--bg2)',

@@ -14,6 +14,7 @@ import { QueryError } from '@/components/QueryError';
 import { readState } from '@/lib/readState';
 import { PageControls } from '@/components/coremetry/PageControls';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { useT } from '@/lib/i18n';
 
 // /monitors — synthetic uptime + heartbeat dashboard.
 //
@@ -24,6 +25,7 @@ import { PageShell } from '@/components/coremetry/PageShell';
 //                 the cron job. State flips down when the gap exceeds
 //                 the monitor's `intervalSec` (treated as grace window).
 export default function MonitorsPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const confirm = useConfirm();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'editor';
@@ -40,7 +42,7 @@ export default function MonitorsPage() {
 
   return (
     <>
-      <Topbar title="Monitors" />
+      <Topbar title={tn('nav.monitors')} />
       <PageShell>
         {/* v0.10.1319 K1 — bar artık herkese basılıyor (sayaç salt-okur
             bilgi, invariant #7); yalnız eylem yuvası rol kapılı. */}

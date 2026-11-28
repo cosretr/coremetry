@@ -6,7 +6,7 @@ import { useQuery, useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
 import { timeRangeToNs } from '@/lib/utils';
-import { t, tf, useLang } from '@/lib/i18n';
+import { t, tf, useLang, useT } from '@/lib/i18n';
 import { clampThanosWindow, THANOS_MAX_WINDOW_LABEL } from '@/lib/thanosWindow';
 import { Topbar } from '@/components/Topbar';
 import { Badge } from '@/components/ui';
@@ -84,6 +84,7 @@ export default function PodPage() {
 }
 
 function PodDetail() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   // v0.10.2246 — sayfa metinleri arayüz dilinde (lib/i18n podpage.*); TR metin aynen.
   const lang = useLang();
   const [sp] = useSearchParams();
@@ -236,7 +237,7 @@ function PodDetail() {
   if (!pod) {
     return (
       <>
-        <Topbar title="Pod" />
+        <Topbar title={tn('page.pod')} />
         <PageShell><Empty icon="—" title={t('podpage.noPod', lang)} /></PageShell>
       </>
     );
@@ -283,7 +284,7 @@ function PodDetail() {
 
   return (
     <>
-      <Topbar title={`Pod · ${pod}`} range={range} onRangeChange={setRange} />
+      <Topbar title={`${tn('page.pod')} · ${pod}`} range={range} onRangeChange={setRange} />
       <PageShell>
         <PodIdentityLine detail={detail} clusterName={cluster || clusterParam} namespace={namespace || nsParam} pod={pod}
           row={row} at={atParam} pageRange={range} pivots={pivots} />

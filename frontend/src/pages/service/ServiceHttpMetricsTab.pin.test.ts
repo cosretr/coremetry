@@ -9,7 +9,7 @@ import { t, tf } from '@/lib/i18n';
 describe('HTTP Metrics sekmesi', () => {
   it('Service sekme şeridinde ve render ediliyor', () => {
     const svc = read('../Service.tsx');
-    expect(svc).toContain("{ key: 'http',       label: 'HTTP/GRPC' }"); // v0.10.1566 — ad HTTP/GRPC, gRPC eki yok
+    expect(svc).toContain("{ key: 'http',       label: tn('tab.http') }"); // v0.10.2486 — ad katalogda (tab.http = HTTP/GRPC) // v0.10.1566 — ad HTTP/GRPC, gRPC eki yok
     // v0.10.1377 — env + Topbar cluster kapsamı sekmeye iner (VM ortam süzgeci).
     expect(svc).toContain("{tab === 'http' && <ServiceHttpMetricsTab service={svc} range={range} env={env} cluster={scopeCluster} />}");
   });

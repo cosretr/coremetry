@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { TabStrip as UiTabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5) — sayfanın yerel TabStrip sarmalayıcısıyla ad çakışmasın
 import { useNavigate, useSearchParams } from 'react-router';
 import {
@@ -20,6 +20,7 @@ import { aiErrorHint } from '@/lib/aiErrors';
 import { tsLong } from '@/lib/utils';
 import type { AuditEntry, Runbook, RunbookStep, RunbookStepKind, RunbookExecution } from '@/lib/types';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { useT, useLang, tf, t as tl, type Lang } from '@/lib/i18n';
 import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 
 // Runbook detail (v0.7.0) — Overview + the Steps editor (the OneUptime
@@ -30,11 +31,12 @@ import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 —
 // Step-kind glyphs are lucide components (rendered via <Icon size strokeWidth/>,
 // colour inherits currentColor) — same convention as the sidebar nav icons.
 const KIND_META: { kind: RunbookStepKind; icon: LucideIcon; label: string; desc: string }[] = [
-  { kind: 'manual',     icon: Hand,          label: 'Manual',     desc: 'Pause the run and wait for a responder to tick it off.' },
-  { kind: 'query',      icon: Search,        label: 'Query',      desc: 'Run a Coremetry query inline and capture the result.' },
-  { kind: 'http',       icon: Globe,         label: 'HTTP',       desc: 'Call an external API — PagerDuty, Slack, your own service.' },
-  { kind: 'javascript', icon: Code,          label: 'JavaScript', desc: 'Run a sandboxed JS snippet on the agent. Capture output.' },
-  { kind: 'bash',       icon: SquareTerminal, label: 'Bash',      desc: 'Run a shell command on the agent.' },
+  // label / desc: i18n anahtarları (runbookP.kind.*), çizimde çevrilir.
+  { kind: 'manual',     icon: Hand,          label: 'runbookP.kind.manual',     desc: 'runbookP.kind.manual.desc' },
+  { kind: 'query',      icon: Search,        label: 'runbookP.kind.query',      desc: 'runbookP.kind.query.desc' },
+  { kind: 'http',       icon: Globe,         label: 'runbookP.kind.http',       desc: 'runbookP.kind.http.desc' },
+  { kind: 'javascript', icon: Code,          label: 'runbookP.kind.javascript', desc: 'runbookP.kind.javascript.desc' },
+  { kind: 'bash',       icon: SquareTerminal, label: 'runbookP.kind.bash',      desc: 'runbookP.kind.bash.desc' },
 ];
 
 const EXEC_BADGE: Record<string, string> = {
@@ -55,6 +57,8 @@ export default function RunbookDetailPage() {
 }
 
 function Inner() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
+  const lang = useLang();
   const [sp, setSp] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -91,14 +95,14 @@ function Inner() {
   if (!id || rbQ.isError) {
     return (
       <>
-        <Topbar title="Runbook" />
+        <Topbar title={tn('page.runbook')} />
         <PageShell>
           <div className="controls" style={{ marginBottom: 12 }}>
-            <Button variant="secondary" size="sm" onClick={() => navigate('/runbooks')}>← Runbooks</Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/runbooks')}>{tn('runbookP.back')}</Button>
           </div>
           {!id
-            ? <Empty icon={<TriangleAlert size={28} strokeWidth={1.5} />} title="No runbook selected">Pick a runbook from the list to view or edit it.</Empty>
-            : <Empty icon={<TriangleAlert size={28} strokeWidth={1.5} />} title="Runbook not found">This runbook may have been deleted, or the link is stale. Head back to the Runbooks list.</Empty>}
+            ? <Empty icon={<TriangleAlert size={28} strokeWidth={1.5} />} title={tn('runbookP.none.title')}>{tn('runbookP.none.body')}</Empty>
+            : <Empty icon={<TriangleAlert size={28} strokeWidth={1.5} />} title={tn('runbookP.notFound.title')}>{tn('runbookP.notFound.body')}</Empty>}
         </PageShell>
       </>
     );
@@ -117,14 +121,13 @@ function Inner() {
   };
   const remove = async () => {
     if (!await confirm({
-      title: 'Runbook silinsin mi?',
-      body: <><b>{draft.title}</b> prosedürü ve tanımı kalıcı olarak silinecek.
-        Geçmiş çalıştırmalar denetim için SAKLANIR.</>,
-      confirmLabel: 'Runbook’u sil',
+      title: tn('runbookP.del.title'),
+      body: <><b>{draft.title}</b> {tn('runbookP.del.body')}</>,
+      confirmLabel: tn('runbookP.del.confirm'),
       danger: true,
     })) return;
     try { await deleteRb.mutateAsync(id); navigate('/runbooks'); }
-    catch (e) { setErr(`Delete failed: ${e instanceof Error ? e.message : String(e)}`); }
+    catch (e) { setErr(tf('runbookP.err.delete', lang, { msg: e instanceof Error ? e.message : String(e) })); }
   };
   const run = async () => {
     setErr(null);
@@ -132,7 +135,7 @@ function Inner() {
       if (dirty) await save(); // the run snapshots the latest steps, so persist first
       const ex = await executeRb.mutateAsync({ id, problemId: problemId || undefined });
       if (ex?.id) navigate(`/runbook-exec?id=${encodeURIComponent(ex.id)}`);
-    } catch (e) { setErr(`Run failed: ${e instanceof Error ? e.message : String(e)}`); }
+    } catch (e) { setErr(tf('runbookP.err.run', lang, { msg: e instanceof Error ? e.message : String(e) })); }
   };
 
   const addStep = (kind: RunbookStepKind) => {
@@ -156,40 +159,40 @@ function Inner() {
 
   return (
     <>
-      <Topbar title={draft.title || 'Runbook'} />
+      <Topbar title={draft.title || tn('page.runbook')} />
       <PageShell>
         {err && (
           <div style={{ background: 'var(--bg1)', border: '1px solid var(--err)', color: 'var(--err)', borderRadius: 6, padding: '8px 12px', marginBottom: 10, fontSize: 13 }}>
-            {err} <Button variant="secondary" size="sm" style={{ marginLeft: 8 }} onClick={() => setErr(null)}>dismiss</Button>
+            {err} <Button variant="secondary" size="sm" style={{ marginLeft: 8 }} onClick={() => setErr(null)}>{tn('runbookP.dismiss')}</Button>
           </div>
         )}
         {problemId && (
           <div className="cm-callout" style={{ marginBottom: 10 }}>
-            Bu çalıştırma <span className="mono">{problemId}</span> problemine bağlanacak (AI SRE önerisi).
-            Ajan hiçbir şeyi çalıştırmaz — <b>Run</b> ile siz başlatırsınız.
+            {tn('runbookP.link.pre')} <span className="mono">{problemId}</span> {tn('runbookP.link.post')}
+            {' '}{tn('runbookP.link.agent')} <b>{tn('runbookP.run')}</b> {tn('runbookP.link.start')}
           </div>
         )}
         <div className="row" style={{ alignItems: 'center', gap: 12, marginBottom: 10 }}>
-          <Button variant="secondary" size="sm" onClick={() => navigate('/runbooks')}>← Runbooks</Button>
+          <Button variant="secondary" size="sm" onClick={() => navigate('/runbooks')}>{tn('runbookP.back')}</Button>
           {/* v0.10.929 (K5) — açık/kapalı ayar durumu; kelime taşır, renk yok. */}
           <span className="badge b-gray">
-            {draft.enabled ? 'ENABLED' : 'DISABLED'}
+            {draft.enabled ? tn('runbookP.enabled') : tn('runbookP.disabled')}
           </span>
           {draft.createdBy && (
-            <span style={{ color: 'var(--text3)', fontSize: 12 }}>by {draft.createdBy}</span>
+            <span style={{ color: 'var(--text3)', fontSize: 12 }}>{tf('runbookP.by', lang, { who: draft.createdBy })}</span>
           )}
           <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             {canEdit && (
               <Button variant="primary" size="sm" onClick={run} disabled={executeRb.isPending || draft.steps.length === 0 || !draft.enabled}
                 leftIcon={<Play size={14} strokeWidth={1.75} />}
-                title={!draft.enabled ? 'Runbook is disabled — enable it to run' : draft.steps.length === 0 ? 'Add steps before running' : 'Start an execution'}>
-                Run
+                title={!draft.enabled ? tn('runbookP.run.disabledHint') : draft.steps.length === 0 ? tn('runbookP.run.noSteps') : tn('runbookP.run.start')}>
+                {tn('runbookP.run')}
               </Button>
             )}
             {canEdit && dirty && (
               <Button variant="secondary" size="sm"
-                onClick={() => { setErr(null); save().catch(e => setErr(`Save failed: ${e instanceof Error ? e.message : String(e)}`)); }} loading={updateRb.isPending}>
-                Save changes
+                onClick={() => { setErr(null); save().catch(e => setErr(tf('runbookP.err.save', lang, { msg: e instanceof Error ? e.message : String(e) }))); }} loading={updateRb.isPending}>
+                {tn('runbookP.save')}
               </Button>
             )}
             {/* v0.9.1006 (M4/O6) — şeridin İKİ ucu doluydu (Run +
@@ -197,7 +200,7 @@ function Inner() {
                 eziliyordu. `ghost-danger` tek dolu birincil bırakıyor. */}
             {canEdit && (
               <Button variant="ghost-danger" size="sm" loading={deleteRb.isPending}
-                onClick={() => void remove()}>Delete</Button>
+                onClick={() => void remove()}>{tn('runbookP.delete')}</Button>
             )}
           </span>
         </div>
@@ -220,19 +223,22 @@ function Inner() {
 
 // v0.10.945 (tablo standardı dilim 3) — ikincil hücreler renkle (S3),
 // sayılar arayüz fontunda (S2); eylemler `kind: 'actions'` kolonu.
-const EXEC_COLS: ColumnDef<RunbookExecution>[] = [
-  { id: 'id',        label: 'Run',        sortValue: e => e.id,                  naturalDir: 'asc', width: 150 },
-  { id: 'status',    label: 'Status',     sortValue: e => e.status,              naturalDir: 'asc', width: 130 },
-  { id: 'startedAt', label: 'Started',    sortValue: e => e.startedAt,           numeric: true, width: 180 },
-  { id: 'steps',     label: 'Steps',      sortValue: e => e.stepStates.length,   numeric: true, width: 90 },
-  { id: 'duration',  label: 'Duration',   sortValue: e => (e.completedAt ? e.completedAt - e.startedAt : 0), numeric: true, width: 110, tone: () => 'muted' },
-  { id: 'startedBy', label: 'Triggered by', sortValue: e => e.startedBy ?? '',   naturalDir: 'asc', width: 200, mono: true, tone: () => 'muted' },
+const EXEC_COLS = (lang: Lang): ColumnDef<RunbookExecution>[] => [
+  { id: 'id',        label: tl('runbookP.col.run', lang),        sortValue: e => e.id,                  naturalDir: 'asc', width: 150 },
+  { id: 'status',    label: tl('runbookP.col.status', lang),     sortValue: e => e.status,              naturalDir: 'asc', width: 130 },
+  { id: 'startedAt', label: tl('runbookP.col.started', lang),    sortValue: e => e.startedAt,           numeric: true, width: 180 },
+  { id: 'steps',     label: tl('runbookP.col.steps', lang),      sortValue: e => e.stepStates.length,   numeric: true, width: 90 },
+  { id: 'duration',  label: tl('runbookP.col.duration', lang),   sortValue: e => (e.completedAt ? e.completedAt - e.startedAt : 0), numeric: true, width: 110, tone: () => 'muted' },
+  { id: 'startedBy', label: tl('runbookP.col.triggeredBy', lang), sortValue: e => e.startedBy ?? '',   naturalDir: 'asc', width: 200, mono: true, tone: () => 'muted' },
   // v0.10.945 — boyutlanmaz eylem kolonu: Öneri + Open ≈117px içerik + 24px dolgu.
-  { id: 'open',      label: 'Actions',    kind: 'actions',                       width: 140, minWidth: 140 },
+  { id: 'open',      label: tl('runbookP.col.actions', lang),    kind: 'actions',                       width: 140, minWidth: 140 },
 ];
 
 function ExecutionsTab({ runbookId }: { runbookId: string }) {
   const navigate = useNavigate();
+  const lang = useLang();
+  const tn = useT();
+  const execCols = useMemo(() => EXEC_COLS(lang), [lang]);
   const q = useRunbookExecutions({ runbookId });
   // v0.9.1198 (Faz 5.5) — probleme bağlı tamamlanmış koşudan güncelleme
   // önerisi. Tek açık öneri (kanıt bakışı, veri sayfası değil); tıkla-getir,
@@ -253,7 +259,7 @@ function ExecutionsTab({ runbookId }: { runbookId: string }) {
   // çeviriyordu: koşmuş bir runbook hiç koşmamış gibi okunuyordu.
   const execs = q.isLoading ? undefined : q.isError ? null : q.data ?? [];
   const dt = useDataTable<RunbookExecution>({
-    storageKey: 'runbook-executions', columns: EXEC_COLS, rows: execs ?? [],
+    storageKey: 'runbook-executions', columns: execCols, rows: execs ?? [],
     initialSort: { id: 'startedAt', dir: 'desc' },
   });
   // v0.10.954 — tablo standardı T12: erken dönüşler (Spinner / QueryError /
@@ -263,9 +269,9 @@ function ExecutionsTab({ runbookId }: { runbookId: string }) {
     execs === undefined ? { kind: 'loading' }
     : execs === null ? {
       kind: 'error', onRetry: () => void q.refetch(),
-      message: 'Koşular okunamadı — bu bir hata, hiç koşulmamış bir runbook değil; geçmiş koşular kayıtlı duruyor.',
+      message: tn('runbookP.exec.error'),
     }
-    : { kind: 'empty', message: 'Henüz koşu yok — çalıştırmak için Run\'a tıkla; her koşu burada kaydedilir: kim, ne zaman, hangi adımlar.' };
+    : { kind: 'empty', message: tn('runbookP.exec.empty') };
   return (
     <div className="table-wrap">
       <table {...dt.tableProps}>
@@ -290,11 +296,11 @@ function ExecutionsTab({ runbookId }: { runbookId: string }) {
                   {!!e.problemId && !!e.completedAt && (
                     <Button variant="secondary" size="sm" onClick={() => suggest(e)}
                       loading={sugg?.busy === true && sugg.execId === e.id} style={{ marginRight: 6 }}
-                      title="Bu koşu + bağlı problemin çözüm kanıtından runbook güncelleme önerisi üret">
-                      <IconSparkles /> Öneri
+                      title={tn('runbookP.suggest.title')}>
+                      <IconSparkles /> {tn('runbookP.suggest')}
                     </Button>
                   )}
-                  <Button variant="secondary" size="sm" onClick={() => navigate(`/runbook-exec?id=${encodeURIComponent(e.id)}`)}>Open</Button>
+                  <Button variant="secondary" size="sm" onClick={() => navigate(`/runbook-exec?id=${encodeURIComponent(e.id)}`)}>{tn('runbookP.open')}</Button>
                 </DataTableCell>
               </tr>
             );
@@ -304,7 +310,7 @@ function ExecutionsTab({ runbookId }: { runbookId: string }) {
       {sugg && !sugg.busy && (
         <div className="card" style={{ marginTop: 10 }}>
           <div className="ov-card-h">
-            <h3><IconSparkles /> Güncelleme önerisi — koşu <span className="mono" style={{ fontSize: 12 }}>{sugg.execId}</span></h3>
+            <h3><IconSparkles /> {tn('runbookP.suggest.head')} <span className="mono" style={{ fontSize: 12 }}>{sugg.execId}</span></h3>
           </div>
           <div className="ov-card-b">
             {sugg.err ? (
@@ -326,16 +332,19 @@ function ExecutionsTab({ runbookId }: { runbookId: string }) {
 // primitife taşındı (kardeş ExecutionsTab zaten öyleydi; bu sekme tek
 // istisnaydı). Kolon kümesi, sıra, etiketler ve hücre içerikleri AYNEN
 // korundu; kazanılan sıralama + yeniden boyutlandırma + kalıcı genişlik.
-const AUDIT_COLS: ColumnDef<AuditEntry>[] = [
+const AUDIT_COLS = (lang: Lang): ColumnDef<AuditEntry>[] => [
   // Zaman mono ve SOLA hizalı kalıyor (numeric:true başlığı sağa iterdi) —
   // yalnız sıralanabilirlik ekleniyor.
-  { id: 'time',    label: 'Time',    sortValue: a => a.time,                width: 170 },
-  { id: 'actor',   label: 'Actor',   sortValue: a => a.actorEmail ?? '',    naturalDir: 'asc', width: 220 },
-  { id: 'action',  label: 'Action',  sortValue: a => a.action,              naturalDir: 'asc', width: 180 },
-  { id: 'details', label: 'Details', sortValue: a => a.details ?? '',       naturalDir: 'asc', flex: true, mono: true, tone: () => 'faint' },
+  { id: 'time',    label: tl('runbookP.col.time', lang),    sortValue: a => a.time,                width: 170 },
+  { id: 'actor',   label: tl('runbookP.col.actor', lang),   sortValue: a => a.actorEmail ?? '',    naturalDir: 'asc', width: 220 },
+  { id: 'action',  label: tl('runbookP.col.action', lang),  sortValue: a => a.action,              naturalDir: 'asc', width: 180 },
+  { id: 'details', label: tl('runbookP.col.details', lang), sortValue: a => a.details ?? '',       naturalDir: 'asc', flex: true, mono: true, tone: () => 'faint' },
 ];
 
 function AuditTab({ runbookId, isAdmin }: { runbookId: string; isAdmin: boolean }) {
+  const lang = useLang();
+  const tn = useT();
+  const auditCols = useMemo(() => AUDIT_COLS(lang), [lang]);
   const q = useQuery({
     queryKey: ['runbook-audit', runbookId],
     queryFn: () => api.auditLog('720h', { targetId: runbookId }),
@@ -345,11 +354,11 @@ function AuditTab({ runbookId, isAdmin }: { runbookId: string; isAdmin: boolean 
   // Koşulsuz hook — her erken dönüşün (yasak / hata / boş) ÜSTÜNDE kalmalı.
   // Varsayılan sıra sunucununkiyle birebir: ListAuditLog `ORDER BY time DESC`.
   const dt = useDataTable<AuditEntry>({
-    storageKey: 'runbook-audit', columns: AUDIT_COLS, rows: q.data ?? [],
+    storageKey: 'runbook-audit', columns: auditCols, rows: q.data ?? [],
     initialSort: { id: 'time', dir: 'desc' },
   });
   if (!isAdmin) {
-    return <Empty icon="🔒" title="Admin only">The change/run audit log (audit_events) is admin-only. The per-run step audit — who ticked each step, when, with what output — is on the Executions tab and visible to everyone.</Empty>;
+    return <Empty icon="🔒" title={tn('runbookP.audit.adminOnly')}>{tn('runbookP.audit.adminOnly.body')}</Empty>;
   }
   // v0.9.865 (tutarlılık denetimi MT1) — yasak ≠ hatalı ≠ boş. `!isAdmin`
   // yukarıda kendi dalında; burada `?? []` okuma hatasını "No audit entries"e
@@ -360,7 +369,7 @@ function AuditTab({ runbookId, isAdmin }: { runbookId: string; isAdmin: boolean 
   const auditState: Omit<DataTableStateProps<AuditEntry>, 'dt'> =
     rows === undefined ? { kind: 'loading' }
     : rows === null ? { kind: 'error', onRetry: () => void q.refetch() }
-    : { kind: 'empty', message: 'Denetim kaydı yok — son 30 günde bu runbook için kayıtlı değişiklik ya da koşu yok.' };
+    : { kind: 'empty', message: tn('runbookP.audit.empty') };
   return (
     <div className="table-wrap">
       <table {...dt.tableProps}>
@@ -385,14 +394,15 @@ function AuditTab({ runbookId, isAdmin }: { runbookId: string; isAdmin: boolean 
 function TabStrip({ tab, onChange, stepCount }: {
   tab: Tab; onChange: (t: Tab) => void; stepCount: number;
 }) {
+  const tn = useT();
   const items: { key: Tab; label: string; hint?: string }[] = [
-    { key: 'overview', label: 'Overview' },
-    { key: 'steps', label: 'Steps', hint: stepCount > 0 ? String(stepCount) : undefined },
-    { key: 'executions', label: 'Executions' },
-    { key: 'audit', label: 'Audit Logs' },
+    { key: 'overview', label: tn('runbookP.tab.overview') },
+    { key: 'steps', label: tn('runbookP.tab.steps'), hint: stepCount > 0 ? String(stepCount) : undefined },
+    { key: 'executions', label: tn('runbookP.tab.executions') },
+    { key: 'audit', label: tn('runbookP.tab.audit') },
   ];
   return (
-    <UiTabStrip ariaLabel="Runbook sekmeleri" value={tab} onChange={onChange} style={{ marginBottom: 16 }}
+    <UiTabStrip ariaLabel={tn('runbookP.tabs.aria')} value={tab} onChange={onChange} style={{ marginBottom: 16 }}
       tabs={items.map(it => ({
         key: it.key,
         label: <>{it.label}{it.hint && <span className="badge b-gray" style={{ marginLeft: 6, padding: '0 6px' }}>{it.hint}</span>}</>,
@@ -416,24 +426,27 @@ const RUNBOOK_NOTIFY_TYPES: { type: string; label: string }[] = [
 function Overview({ draft, canEdit, patch }: {
   draft: Runbook; canEdit: boolean; patch: (p: Partial<Runbook>) => void;
 }) {
+  const tn = useT();
+  const lang = useLang();
   const labelsText = (draft.labels ?? []).join(', ');
   return (
     <div className="grid-2" style={{ display: 'grid', gap: 16, maxWidth: 1100 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <Field label="Title">
+        <Field label={tn('runbookP.f.title')}>
           <input value={draft.title} disabled={!canEdit}
-            onChange={e => patch({ title: e.target.value })} placeholder="e.g. API gateway 5xx spike" />
+            onChange={e => patch({ title: e.target.value })} placeholder={tn('runbookP.f.title.ph')} />
         </Field>
-        <Field label="Description (markdown)">
+        <Field label={tn('runbookP.f.desc')}>
           <textarea value={draft.description ?? ''} disabled={!canEdit}
             onChange={e => patch({ description: e.target.value })}
-            placeholder="# When to run&#10;…what this procedure is for, prerequisites, escalation."
+            placeholder={tn('runbookP.f.desc.ph')}
             spellCheck={false}
             style={{ minHeight: 180, fontFamily: 'var(--font-mono)', fontSize: 13, resize: 'vertical' }} />
         </Field>
-        <Field label="Labels (comma-separated)">
+        <Field label={tn('runbookP.f.labels')}>
           <input value={labelsText} disabled={!canEdit}
             onChange={e => patch({ labels: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+            /* i18n-exempt: example label values */
             placeholder="payments, sev1, db" />
           {(draft.labels ?? []).length > 0 && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
@@ -447,7 +460,7 @@ function Overview({ draft, canEdit, patch }: {
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
             <input type="checkbox" checked={draft.enabled}
               onChange={e => patch({ enabled: e.target.checked })} />
-            Enabled (runbook can be executed)
+            {tn('runbookP.f.enabled')}
           </label>
         )}
         {canEdit && (
@@ -460,12 +473,12 @@ function Overview({ draft, canEdit, patch }: {
                 notifyChannels: e.target.checked && !(draft.notifyChannels && draft.notifyChannels.length)
                   ? ['email'] : draft.notifyChannels,
               })} />
-            Notify on completion when a run finishes
+            {tn('runbookP.f.notify')}
           </label>
         )}
         {canEdit && draft.notifyOnComplete && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13, paddingLeft: 24 }}>
-            <span style={{ color: 'var(--text3)' }}>Channels:</span>
+            <span style={{ color: 'var(--text3)' }}>{tn('runbookP.f.channels')}</span>
             {RUNBOOK_NOTIFY_TYPES.map(({ type, label }) => (
               <label key={type} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <input type="checkbox" checked={!!draft.notifyChannels?.includes(type)}
@@ -475,26 +488,26 @@ function Overview({ draft, canEdit, patch }: {
                       ? Array.from(new Set([...cur, type]))
                       : cur.filter(x => x !== type) });
                   }} />
-                {label}
+                {type === 'email' ? tn('runbookP.ch.email') : label}
               </label>
             ))}
-            <span style={{ color: 'var(--text3)', fontSize: 11 }}>(fires the enabled channels of each type; empty = email)</span>
+            <span style={{ color: 'var(--text3)', fontSize: 11 }}>{tn('runbookP.f.channels.hint')}</span>
           </div>
         )}
         <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-          Updated {tsLong(draft.updatedAt)} · Created {tsLong(draft.createdAt)}
+          {tf('runbookP.f.stamps', lang, { updated: tsLong(draft.updatedAt), created: tsLong(draft.createdAt) })}
         </div>
       </div>
       <div>
         <div style={{ fontSize: 11, color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>
-          Preview
+          {tn('runbookP.preview')}
         </div>
         <div style={{
           minHeight: 180, padding: 12, fontSize: 13, lineHeight: 1.55,
           background: 'var(--bg1)', border: '1px solid var(--border)', borderRadius: 8, overflowWrap: 'break-word',
         }}>
           {(draft.description ?? '').trim() === ''
-            ? <span style={{ color: 'var(--text3)', fontStyle: 'italic' }}>Description preview</span>
+            ? <span style={{ color: 'var(--text3)', fontStyle: 'italic' }}>{tn('runbookP.preview.empty')}</span>
             : <RenderedMarkdown text={draft.description ?? ''} />}
         </div>
       </div>
@@ -509,12 +522,12 @@ function StepsEditor({ steps, canEdit, onAdd, onUpdate, onRemove, onMove }: {
   onRemove: (i: number) => void;
   onMove: (from: number, to: number) => void;
 }) {
+  const tn = useT();
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   return (
     <div>
       <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12, maxWidth: 760 }}>
-        Ordered list of steps to run. Manual steps pause the runbook until a responder ticks them off;
-        automated steps (HTTP / JavaScript / Bash) run inline on the coremetry-agent. Drag to reorder.
+        {tn('runbookP.steps.intro')}
       </p>
 
       {steps.length === 0 ? (
@@ -532,7 +545,7 @@ function StepsEditor({ steps, canEdit, onAdd, onUpdate, onRemove, onMove }: {
           {canEdit && (
             <div style={{ marginTop: 16 }}>
               <div style={{ fontSize: 11, color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 8 }}>
-                Add a step
+                {tn('runbookP.steps.add')}
               </div>
               <KindCards canEdit={canEdit} onAdd={onAdd} />
             </div>
@@ -546,8 +559,9 @@ function StepsEditor({ steps, canEdit, onAdd, onUpdate, onRemove, onMove }: {
 function KindCards({ canEdit, onAdd, hero }: {
   canEdit: boolean; onAdd: (k: RunbookStepKind) => void; hero?: boolean;
 }) {
+  const tn = useT();
   if (!canEdit) {
-    return hero ? <Empty icon="▤" title="No steps yet">This runbook has no steps. An editor can add them.</Empty> : null;
+    return hero ? <Empty icon="▤" title={tn('runbookP.steps.none')}>{tn('runbookP.steps.none.body')}</Empty> : null;
   }
   return (
     <div style={hero ? {
@@ -556,9 +570,9 @@ function KindCards({ canEdit, onAdd, hero }: {
       {hero && (
         <div style={{ textAlign: 'center', marginBottom: 18, color: 'var(--text2)' }}>
           <ListChecks size={28} strokeWidth={1.5} />
-          <h3 style={{ margin: '8px 0 2px', color: 'var(--text)' }}>Start your runbook</h3>
+          <h3 style={{ margin: '8px 0 2px', color: 'var(--text)' }}>{tn('runbookP.steps.hero')}</h3>
           <p style={{ color: 'var(--text2)', fontSize: 13, margin: 0 }}>
-            Add the first step. You can reorder and edit at any time.
+            {tn('runbookP.steps.hero.body')}
           </p>
         </div>
       )}
@@ -573,8 +587,8 @@ function KindCards({ canEdit, onAdd, hero }: {
               style={{ padding: 12, textAlign: 'left' }}>
               <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                 <span style={{ color: 'var(--text2)', display: 'inline-flex' }}><Glyph size={20} strokeWidth={1.75} /></span>
-                <span style={{ fontWeight: 700, marginTop: 8 }}>{k.label}</span>
-                <span style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4, lineHeight: 1.4 }}>{k.desc}</span>
+                <span style={{ fontWeight: 700, marginTop: 8 }}>{tn(k.label)}</span>
+                <span style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4, lineHeight: 1.4 }}>{tn(k.desc)}</span>
               </span>
             </Button>
           );
@@ -589,6 +603,7 @@ function StepRow({ step, index, canEdit, isDragging, onDragStart, onDragEnd, onD
   onDragStart: () => void; onDragEnd: () => void; onDropOn: () => void;
   onChange: (p: Partial<RunbookStep>) => void; onRemove: () => void;
 }) {
+  const tn = useT();
   const meta = KIND_META.find(k => k.kind === step.kind);
   const Glyph = meta?.icon;
   return (
@@ -604,20 +619,20 @@ function StepRow({ step, index, canEdit, isDragging, onDragStart, onDragEnd, onD
       }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         {canEdit && (
-          <span style={{ color: 'var(--text3)', cursor: 'grab', display: 'inline-flex' }} title="Drag to reorder">
+          <span style={{ color: 'var(--text3)', cursor: 'grab', display: 'inline-flex' }} title={tn('runbookP.step.drag')}>
             <GripVertical size={16} strokeWidth={1.75} />
           </span>
         )}
         <span className="badge b-info" style={{ whiteSpace: 'nowrap' }}>
-          {Glyph && <Glyph size={12} strokeWidth={2} />}{meta?.label ?? step.kind}
+          {Glyph && <Glyph size={12} strokeWidth={2} />}{meta ? tn(meta.label) : step.kind}
         </span>
         <input value={step.title} disabled={!canEdit}
           onChange={e => onChange({ title: e.target.value })}
-          placeholder="Step title" style={{ flex: 1 }} />
+          placeholder={tn('runbookP.step.title.ph')} style={{ flex: 1 }} />
         <span style={{ color: 'var(--text3)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>#{index + 1}</span>
         {canEdit && (
-          <Button variant="ghost-danger" size="sm" onClick={onRemove} title="Remove step"
-            aria-label="Remove step">
+          <Button variant="ghost-danger" size="sm" onClick={onRemove} title={tn('runbookP.step.remove')}
+            aria-label={tn('runbookP.step.remove')}>
             <X size={14} strokeWidth={2} />
           </Button>
         )}
@@ -625,18 +640,18 @@ function StepRow({ step, index, canEdit, isDragging, onDragStart, onDragEnd, onD
 
       <textarea value={step.instructions ?? ''} disabled={!canEdit}
         onChange={e => onChange({ instructions: e.target.value })}
-        placeholder="Instructions (markdown) — what the responder should do / check."
+        placeholder={tn('runbookP.step.instr.ph')}
         spellCheck={false}
         style={{ width: '100%', marginTop: 8, minHeight: 64, fontSize: 13, resize: 'vertical' }} />
 
       {step.kind === 'manual' && (
-        <Field label="Expected outcome (optional)">
+        <Field label={tn('runbookP.step.expected')}>
           <input value={step.expected ?? ''} disabled={!canEdit}
-            onChange={e => onChange({ expected: e.target.value })} placeholder="What 'done' looks like" />
+            onChange={e => onChange({ expected: e.target.value })} placeholder={tn('runbookP.step.expected.ph')} />
         </Field>
       )}
       {step.kind === 'query' && (
-        <Field label="Query (ClickHouse SQL / Explore DSL)">
+        <Field label={tn('runbookP.step.query')}>
           <textarea value={step.query ?? ''} disabled={!canEdit}
             onChange={e => onChange({ query: e.target.value })}
             placeholder="error_rate by service where service = 'api-gateway'"
@@ -646,38 +661,41 @@ function StepRow({ step, index, canEdit, isDragging, onDragStart, onDragEnd, onD
       )}
       {step.kind === 'http' && (
         <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 8, marginTop: 6 }}>
-          <Field label="Method">
+          <Field label={tn('runbookP.step.method')}>
             <select value={step.method ?? 'GET'} disabled={!canEdit}
               onChange={e => onChange({ method: e.target.value })}>
               {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </Field>
+          {/* i18n-exempt: protocol term */}
           <Field label="URL">
             <input value={step.url ?? ''} disabled={!canEdit}
+              /* i18n-exempt: example URL */
               onChange={e => onChange({ url: e.target.value })} placeholder="https://events.pagerduty.com/v2/enqueue" />
           </Field>
-          <Field label="Headers (one per line: Key: Value)">
+          <Field label={tn('runbookP.step.headers')}>
             <textarea value={headersToText(step.headers)} disabled={!canEdit}
               onChange={e => onChange({ headers: textToHeaders(e.target.value) })}
               placeholder={'Authorization: Token abc\nContent-Type: application/json'}
               spellCheck={false}
               className="mono" style={{ minHeight: 48, resize: 'vertical' }} />
           </Field>
-          <Field label="Body">
+          <Field label={tn('runbookP.step.body')}>
             <textarea value={step.body ?? ''} disabled={!canEdit}
               onChange={e => onChange({ body: e.target.value })} spellCheck={false}
               className="mono" style={{ minHeight: 48, resize: 'vertical' }} />
           </Field>
-          <Field label="Timeout (ms)">
+          <Field label={tn('runbookP.step.timeout')}>
             <input type="number" value={step.timeoutMs ?? ''} disabled={!canEdit}
               onChange={e => onChange({ timeoutMs: e.target.value ? Number(e.target.value) : undefined })} placeholder="10000" />
           </Field>
         </div>
       )}
       {step.kind === 'javascript' && (
-        <Field label="Script (JavaScript — runs sandboxed on the agent)">
+        <Field label={tn('runbookP.step.script')}>
           <textarea value={step.script ?? ''} disabled={!canEdit}
             onChange={e => onChange({ script: e.target.value })}
+            /* i18n-exempt: code example */
             placeholder="// return a value or call out via fetch-like API\nreturn 1 + 1;"
             spellCheck={false}
             className="mono" style={{ minHeight: 72, resize: 'vertical' }} />
@@ -685,12 +703,13 @@ function StepRow({ step, index, canEdit, isDragging, onDragStart, onDragEnd, onD
       )}
       {step.kind === 'bash' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 8, marginTop: 6 }}>
-          <Field label="Command (runs on the agent)">
+          <Field label={tn('runbookP.step.command')}>
             <input value={step.command ?? ''} disabled={!canEdit}
               onChange={e => onChange({ command: e.target.value })}
+              /* i18n-exempt: command example */
               placeholder="kubectl rollout restart deploy/api -n prod" style={{ fontFamily: 'var(--font-mono)' }} />
           </Field>
-          <Field label="Timeout (ms)">
+          <Field label={tn('runbookP.step.timeout')}>
             <input type="number" value={step.timeoutMs ?? ''} disabled={!canEdit}
               onChange={e => onChange({ timeoutMs: e.target.value ? Number(e.target.value) : undefined })} placeholder="30000" />
           </Field>

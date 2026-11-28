@@ -51,11 +51,11 @@ describe('bundle bütçe kapısı kablolu', () => {
     for (const p of ['node_modules/zod/v4/index.js', 'node_modules/aria-hidden/dist/index.js', 'node_modules/json-schema-traverse/index.js', 'node_modules/@opentelemetry/api/build/index.js']) expect(re.test(p), p).toBe(false);
   });
 
-  it('scripts/bundle-budget.mjs: yasak kaynak regex\'i, 164 KB, zlib, index.html kümesi', () => {
+  it('scripts/bundle-budget.mjs: yasak kaynak regex\'i, 170 KB, zlib, index.html kümesi', () => {
     const s = read('scripts/bundle-budget.mjs');
     expect(s).toContain('/node_modules\\/(radix-ui|@radix-ui|cmdk|sonner|@floating-ui|react-remove-scroll|aria-hidden|use-sidecar|use-callback-ref|react-style-singleton|get-nonce|detect-node-es)\\//');
     expect(s).toContain('/src\\/components\\/shadcn\\//');
-    expect(s).toContain('process.env.BUNDLE_BUDGET_KB || 164'); // v0.10.2427 — 205.2 → 161.6 KB (yalnız aşağı)
+    expect(s).toContain('process.env.BUNDLE_BUDGET_KB || 170'); // v0.10.2486 — operatör onaylı artış 164 → 170 (dilim 2); önce v0.10.2427 205.2 → 161.6 KB
     expect(s).toContain('process.env.CSS_BUDGET_KB || 50'); // v0.10.2427 — 54.0 → 49.3 KB (cırcır, yalnız aşağı)
     expect(s).toContain('gzipSync(buf)');
     expect(s).toContain("'modulepreload'");

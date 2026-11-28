@@ -9,6 +9,7 @@ import { tsLong } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { useT } from '@/lib/i18n';
 
 // Runbook execution runner (v0.7.0) — step through a live run. Manual steps
 // are ticked here (Done / Skip / Fail + note); automated steps
@@ -33,6 +34,7 @@ export default function RunbookExecutionPage() {
 }
 
 function Inner() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const confirm = useConfirm();
   const [sp] = useSearchParams();
   const navigate = useNavigate();
@@ -50,7 +52,7 @@ function Inner() {
   if (!execId || execQ.isError) {
     return (
       <>
-        <Topbar title="Execution" />
+        <Topbar title={tn('page.execution')} />
         <PageShell>
           <div className="controls" style={{ marginBottom: 12 }}>
             <Button variant="secondary" size="sm" onClick={() => navigate('/runbooks')}>← Runbooks</Button>
@@ -78,7 +80,7 @@ function Inner() {
 
   return (
     <>
-      <Topbar title={exec.titleSnapshot || 'Execution'} />
+      <Topbar title={exec.titleSnapshot || tn('page.execution')} />
       <PageShell>
         {err && (
           <div style={{ background: 'var(--bg1)', border: '1px solid var(--err)', color: 'var(--err)', borderRadius: 6, padding: '8px 12px', marginBottom: 10, fontSize: 13 }}>

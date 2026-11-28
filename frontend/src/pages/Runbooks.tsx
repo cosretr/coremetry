@@ -32,6 +32,7 @@ import {
 } from '@/lib/queries';
 import { tsLong } from '@/lib/utils';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { useT } from '@/lib/i18n';
 
 // Runbooks list (v0.7.0) — operator-authored executable procedures
 // (OneUptime model). This page is the catalogue: title, step count,
@@ -44,6 +45,7 @@ import { PageShell } from '@/components/coremetry/PageShell';
 // column buttons) so they still SEES state per CLAUDE.md invariant 7.
 
 export default function RunbooksPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const confirm = useConfirm();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -124,7 +126,7 @@ export default function RunbooksPage() {
 
   return (
     <>
-      <Topbar title="Runbooks" />
+      <Topbar title={tn('nav.runbooks')} />
       <PageShell>
         <div className="controls" style={{ marginBottom: 14 }}>
           <span style={{ color: 'var(--text2)', fontSize: 12 }}>

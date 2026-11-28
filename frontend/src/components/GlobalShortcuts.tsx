@@ -3,6 +3,7 @@ import { useShortcuts } from '@/lib/keyboard';
 import { navHref } from '@/lib/navHref';
 import { useIncidentsEnabled } from './AuthProvider';
 import { incidentsNavVisible } from '@/lib/incidentsRetired'; // v0.10.1828
+import { t, tf, useCatalogs, useLang } from '@/lib/i18n';
 
 // GlobalShortcuts (v0.5.444) — registers app-wide power-user
 // shortcuts: '/' to focus the page search input, and 'g <x>'
@@ -18,21 +19,23 @@ import { incidentsNavVisible } from '@/lib/incidentsRetired'; // v0.10.1828
 // yarısı ölü/gizli rotaya (g h → silinmiş Home, g o → gizli Monitors)
 // gidiyordu. Artık tek yer; her satır CANLI + görünür bir rota, harf
 // başına tek anlam. 'g n' → Inbox eklendi (günlük iniş yüzeyi).
-const PAGES: { key: string; label: string; to: string }[] = [
-  { key: 'g n', label: 'Go to Inbox',       to: '/inbox' },
-  { key: 'g i', label: 'Go to Incidents',   to: '/incidents' },
-  { key: 'g p', label: 'Go to Problems',    to: '/problems' },
-  { key: 'g a', label: 'Go to Signals',     to: '/inbox?tab=signals' }, // v0.10.2481 — Problems › Sinyaller
-  { key: 'g s', label: 'Go to Services',    to: '/services' },
-  { key: 'g o', label: 'Go to Service Map', to: '/service-map' }, // 'o' = tOpology mnemonic (retired /topology → /service-map)
-  { key: 'g t', label: 'Go to Traces',      to: '/traces' },
-  { key: 'g m', label: 'Go to Metrics',     to: '/metrics' },
-  { key: 'g l', label: 'Go to Logs',        to: '/logs' },
-  { key: 'g e', label: 'Go to Explore',     to: '/explore' },
-  { key: 'g r', label: 'Go to Runbooks',    to: '/runbooks' },
-  { key: 'g d', label: 'Go to Dashboards',  to: '/dashboards' },
-  { key: 'g x', label: 'Go to Alerts',      to: '/alerts' },
-  { key: 'g c', label: 'Go to System',      to: '/system/stats' },
+// v0.10.2486 dilim 2 — etiket = "Go to <menü adı>": nav.* anahtarından (tek ad;
+// eski 'Go to Problems' Hatalar sayfasına, 'Go to Inbox' Problemler'e gidiyordu).
+const PAGES: { key: string; navKey: string; to: string }[] = [
+  { key: 'g n', navKey: 'nav.inbox',      to: '/inbox' },
+  { key: 'g i', navKey: 'nav.incidents',  to: '/incidents' },
+  { key: 'g p', navKey: 'nav.problems',   to: '/problems' },
+  { key: 'g a', navKey: 'inbox.tab.signals', to: '/inbox?tab=signals' }, // v0.10.2481 — Problems › Sinyaller
+  { key: 'g s', navKey: 'nav.services',   to: '/services' },
+  { key: 'g o', navKey: 'nav.topology',   to: '/service-map' }, // 'o' = tOpology mnemonic (retired /topology → /service-map)
+  { key: 'g t', navKey: 'nav.traces',     to: '/traces' },
+  { key: 'g m', navKey: 'nav.metrics',    to: '/metrics' },
+  { key: 'g l', navKey: 'nav.logs',       to: '/logs' },
+  { key: 'g e', navKey: 'nav.explore',    to: '/explore' },
+  { key: 'g r', navKey: 'nav.runbooks',   to: '/runbooks' },
+  { key: 'g d', navKey: 'nav.dashboards', to: '/dashboards' },
+  { key: 'g x', navKey: 'nav.alerts',     to: '/alerts' },
+  { key: 'g c', navKey: 'nav.system',     to: '/system/stats' },
 ];
 
 // focusPageSearch finds the page's search input and focuses+selects
@@ -90,12 +93,14 @@ export function GlobalShortcuts() {
   const { search } = useLocation();
   // v0.10.1828 — Incidents emekliyken "g i" kaydı yok (gizli sayfaya kısayol olmaz).
   const incidentsOn = useIncidentsEnabled();
+  const lang = useLang();
+  const catalogVer = useCatalogs(); // katalog geç yüklenirse etiketler yenilensin
 
   useShortcuts(
     [
       {
         keys: '/',
-        label: 'Focus page search',
+        label: t('shortcut.focusSearch', lang),
         group: 'Navigation',
         // keyboard.ts already calls preventDefault before the
         // handler, so the browser's built-in quick-find on '/'
@@ -104,7 +109,7 @@ export function GlobalShortcuts() {
       },
       ...PAGES.filter(p => incidentsNavVisible(p.to, incidentsOn)).map(p => ({
         keys: p.key,
-        label: p.label,
+        label: tf('shortcut.goTo', lang, { page: t(p.navKey, lang) }),
         group: 'Navigation',
         handler: () => navigate(navHref(p.to, search)),
       })),
@@ -112,7 +117,7 @@ export function GlobalShortcuts() {
     // v0.9.932 — `search` DEP: navigate kimliği sabit ama handler artık
     // location'ı kapatıyor. Boş dep listesiyle binding ilk mount'taki
     // pencereyi sonsuza dek taşırdı — düzeltilen bug'ın daha sinsi hâli.
-    [search, incidentsOn],
+    [search, incidentsOn, lang, catalogVer],
   );
 
   return null;

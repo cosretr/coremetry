@@ -24,6 +24,15 @@ vi.mock('@/components/CosreChart', () => ({
 import { ChatBubble } from './ChatBubble';
 import { OperationCard } from './OperationCard';
 import type { ChatOperationPayload, ChatTurn, ChatTypedBlock } from '@/lib/types';
+import { setUserLang } from '@/lib/i18n';
+// v0.10.2486 dilim 2 — metinler katalogda; bu test Türkçe arayüzü pinler.
+// localStorage Node'da yok/boş olabilir: dil tercihi için bellek içi depo.
+beforeEach(() => {
+  const mem = new Map<string, string>();
+  vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, String(v)); }, removeItem: (k: string) => { mem.delete(k); } });
+  setUserLang('tr');
+});
+afterEach(() => { setUserLang(null); vi.unstubAllGlobals(); });
 
 let host: HTMLDivElement;
 let root: Root;
@@ -84,7 +93,7 @@ describe('v0.10.2213 — endpoint cevabı sırası', () => {
     expect([...host.querySelectorAll('[data-trace-table] thead th')].map(t => t.textContent).slice(0, 4)).toEqual(['Başlangıç', 'Trace', 'Süre', 'Durum']);
     expect(host.querySelector('.cm-trace-list__cap')!.textContent).toBe('POST /api/x · svc-a');
     const links = host.querySelector('[data-opcard="links"]')!.textContent!;
-    for (const s of ["Traces'te aç", 'Endpoint sayfası', 'Exceptions', '2 trace, 1 hatalı gösterildi']) expect(links).toContain(s);
+    for (const s of ["Traces'te aç", 'Endpoint sayfası', 'Hatalar', '2 trace, 1 hatalı gösterildi']) expect(links).toContain(s);
   });
 
   it('trace_list bloğu varsa tablo ondan; kartın trace\'leri ikinci tablo açmaz', async () => {

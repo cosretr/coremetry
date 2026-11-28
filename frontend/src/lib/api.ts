@@ -1897,8 +1897,9 @@ export const api = {
   getMl: () => get<import('./types').MLConfig>(`/api/admin/ml`),
   // v0.10.1886 — önerilen ML kurulumu: VM'de kaynak ölçümü + aç/kapa önerisi (yazmaz).
   getMlRecommended: () => get<import('./types').MLRecommended>(`/api/admin/ml/recommended`),
-  putMl: (c: import('./types').MLConfig) =>
-    request<import('./types').MLConfig>(`/api/admin/ml`, {
+  // v0.10.2486 — gölge kuralını on kipine almak açık onay ister (?confirmPrecisionOn=1; yoksa 409).
+  putMl: (c: import('./types').MLConfig, opts?: { confirmPrecisionOn?: boolean }) =>
+    request<import('./types').MLConfig>(`/api/admin/ml${opts?.confirmPrecisionOn ? '?confirmPrecisionOn=1' : ''}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c),
     }),
   putAnomalyPromotion: (c: AnomalyPromotionConfig) =>

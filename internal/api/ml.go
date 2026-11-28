@@ -236,7 +236,7 @@ func (s *Server) getMLEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getMLScorecard(w http.ResponseWriter, r *http.Request) {
-	s.serveCached(w, r, "ml:scorecard:v4:30d", mlScorecardTTL, func(ctx context.Context) (any, error) {
+	s.serveCached(w, r, "ml:scorecard:v5:30d", mlScorecardTTL, func(ctx context.Context) (any, error) {
 		rows, err := s.mlScorecardRows(ctx)
 		if err != nil {
 			return nil, err
@@ -268,6 +268,7 @@ func (s *Server) getMLScorecard(w http.ResponseWriter, r *http.Request) {
 		if lm, ok, _ := s.store.GetLogMaskerState(ctx); ok {
 			out["logMasker"] = lm
 		}
+		out["precisionShadow"] = s.mlPrecisionView(ctx, cfg) // v0.10.2486 (precision B.2)
 		return out, nil
 	})
 }
@@ -390,6 +391,10 @@ func (s *Server) putMLConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	c = chstore.NormalizeMLConfig(c)
 	before := s.store.GetMLConfig(r.Context())
+	onReport, ok := s.mlPrecisionOnGuard(w, r, before, c) // v0.10.2486: on kipi açık onay ister
+	if !ok {
+		return
+	}
 	if err := s.store.SaveMLConfig(r.Context(), c); err != nil {
 		writeErr(w, err)
 		return
@@ -400,6 +405,7 @@ func (s *Server) putMLConfig(w http.ResponseWriter, r *http.Request) {
 	// audit: kim (claim), ne zaman (audit damgası), eski/yeni değer.
 	details, _ := json.Marshal(map[string]any{"before": before, "after": c})
 	s.audit(r, "ml.config", "settings", "ml", string(details))
+	s.mlPrecisionOnAudit(r, onReport)
 	writeJSON(w, c)
 }
 

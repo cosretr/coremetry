@@ -151,7 +151,7 @@ describe('AlertProblemDetail — terfi Problem\'inde desen sayısı grafiği (v0
     expect(m.seriesCalls.length).toBeGreaterThan(0);
     expect(m.seriesCalls.every(c => c.pattern === 'Oracle errors (ORA-)' && c.toNs === undefined)).toBe(true);
     await openTech(el);
-    const signals = sect(el, 'Correlated signals')!;
+    const signals = sect(el, 'İlişkili sinyaller')!;
     const link = [...signals.querySelectorAll('a')].find(a => a.textContent?.includes('Logları aç (desen)'));
     expect(link, 'desen log pivotu').toBeTruthy();
     const href = new URL(link!.getAttribute('href') ?? '', 'http://x');
@@ -190,6 +190,6 @@ describe('AlertProblemDetail — terfi Problem\'inde desen sayısı grafiği (v0
     expect(m.seriesCalls).toHaveLength(0);
     expect(sect(el, 'Desen sayısı')).toBeUndefined();
     await openTech(el);
-    expect(sect(el, 'Root cause analysis')).toBeTruthy();
+    expect(sect(el, 'Kök neden analizi')).toBeTruthy();
   });
 });

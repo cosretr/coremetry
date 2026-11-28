@@ -257,6 +257,10 @@ type MLConfig struct {
 	// ("beklenen günlük desen"; ml_lag_pattern.go). nil = AÇIK (varsayılan),
 	// false = v0.10.2396 önceliği aynen. omitempty: ConfigHash'e girmez.
 	LagDailyPattern *bool `json:"lagDailyPattern,omitempty"`
+	// PrecisionShadow — v0.10.2486 (precision programı B.2): otomatik gölge
+	// kuralı (ml_precision_shadow.go). nil = varsayılan (mode shadow = yalnız
+	// rapor). ConfigHash'e girmez (tespit ayarı değil).
+	PrecisionShadow *MLPrecisionShadow `json:"precisionShadow,omitempty"`
 }
 
 // Gürültü kapısı kipleri (MLConfig.PublishGates). off: kapılar hiç
@@ -412,6 +416,8 @@ func NormalizeMLConfig(c MLConfig) MLConfig {
 		c.MinBaselineRate = d.MinBaselineRate
 	}
 	c.PublishGates = NormalizeMLGatesMode(c.PublishGates)
+	ps := c.PrecisionShadowSettings() // v0.10.2486: her zaman dolu (UI eşikleri görür)
+	c.PrecisionShadow = &ps
 	if c.Detectors == nil {
 		c.Detectors = map[string]bool{}
 	}
@@ -441,6 +447,7 @@ func (c MLConfig) ConfigHash() string {
 	n.GroupProblems = nil   // v0.10.2052: Problem anahtarı tespit ayarı değil
 	n.PublishGates = ""     // v0.10.2473: kapı kipi tespit ayarı değil
 	n.LagDailyPattern = nil // v0.10.2476: öncelik anahtarı tespit ayarı değil
+	n.PrecisionShadow = nil // v0.10.2486: gölge kuralı tespit ayarı değil
 	raw, _ := json.Marshal(n)
 	h := fnv.New64a()
 	_, _ = h.Write(raw)

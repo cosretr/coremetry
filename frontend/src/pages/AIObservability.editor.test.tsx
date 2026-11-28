@@ -36,7 +36,7 @@ describe('AIObservability editör görünümü (v0.10.1484)', () => {
     root = createRoot(host);
     act(() => root!.render(<MemoryRouter><AIObservabilityPage /></MemoryRouter>));
     expect(host.querySelector('[data-testid="routing-report"]')).not.toBeNull();
-    expect(host.textContent).toContain('Editör görünümü');
+    expect(host.textContent).toContain('Editor view') // v0.10.2486 — metin katalogda (EN arayüz; TR 'Editör görünümü');
     expect(m.calls).toEqual([]);
   });
 

@@ -44,7 +44,7 @@ import { fmtNum, fmtNs, timeRangeToNs } from '@/lib/utils';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { parseTopicRef, parseTopicTab, MSG_TOPIC_DEFAULT_TAB, type MsgTopicTab } from './messaging/topicHref';
 import type { DBOpStat, MsgOperationStat, TimeRange } from '@/lib/types';
-import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2306 — sayfa metinleri arayüz dilinde (TR aynı)
+import { t, tf, useLang, useT } from '@/lib/i18n'; // v0.10.2306 — sayfa metinleri arayüz dilinde (TR aynı)
 
 // Çekmecedeki gerekçenin aynısı (v0.9.814): @grafana paketleri statik bağlanırsa bu
 // rotanın chunk'ı ~1 MB büyür ve grafik GÖRÜNMESE de ödenir.
@@ -52,6 +52,7 @@ const CorePanelMultiLazy = lazy(() =>
   import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
 
 export default function MessagingTopicPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const lang = useLang();
   const [params, setParams] = useSearchParams();
   const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
@@ -88,7 +89,7 @@ export default function MessagingTopicPage() {
   if (!ref) {
     return (
       <>
-        <Topbar title="Topic" range={range} onRangeChange={setRange} />
+        <Topbar title={tn('page.topic')} range={range} onRangeChange={setRange} />
         <PageShell>
           <Empty icon="⚠" title={t('mt.noRef', lang)}>
             {t('mt.noRef.a', lang)}<code>system</code>, <code>cluster</code>{t('mt.noRef.or', lang)}<code>destination</code>{t('mt.noRef.b', lang)}
@@ -116,7 +117,7 @@ export default function MessagingTopicPage() {
           sözleşmesi; kapısı lib/ altındaki env bayrağı testi). Bayrağın ADI hiç
           geçmiyor: o kapı kaynağı YORUMLARIYLA tarıyor, yani bir açıklama
           cümlesi bile iddia sayılır ("gate kendi metnini ısırır"). */}
-      <Topbar title="Topic" range={range} onRangeChange={setRange} />
+      <Topbar title={tn('page.topic')} range={range} onRangeChange={setRange} />
       <PageShell>
         <div className="mtp-crumb">
           {/* Geri linki PENCEREYİ TAŞIR (navHref): bağlam değiştiren bir geri
@@ -147,10 +148,10 @@ export default function MessagingTopicPage() {
         <KafkaTopicMetrics system={system} cluster={cluster} topic={destination} range={range} win={win}
           tab={tab} tabs={
             <TabStrip ariaLabel={t('mt.tabs', lang)} value={tab} onChange={setTab} tabs={[
-              { key: 'overview', label: 'Overview' },
-              { key: 'consumers', label: 'Consumers' },
-              { key: 'producers', label: 'Producers' },
-              { key: 'traces', label: 'Traces' },
+              { key: 'overview', label: t('tab.overview', lang) },
+              { key: 'consumers', label: t('tab.consumers', lang) },
+              { key: 'producers', label: t('tab.producers', lang) },
+              { key: 'traces', label: t('tab.traces', lang) },
             ]} />
           } />
 

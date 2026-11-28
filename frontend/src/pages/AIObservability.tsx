@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
@@ -33,7 +33,7 @@ import { traceHref } from '@/lib/traceHref';
 import { PageControls } from '@/components/coremetry/PageControls';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { useAuthRole } from '@/components/AuthProvider'; // v0.10.1484
-import { useLang } from '@/lib/i18n';
+import { t, tf, useLang, useT, type Lang } from '@/lib/i18n';
 import { duration } from '@/lib/format/duration';
 import { percent } from '@/lib/format/percent';
 import { count, fixed } from '@/lib/format/number';
@@ -61,13 +61,13 @@ export default function AIObservabilityPage() {
 
 // EditorAIObservabilityPage — v0.10.1484: editörün /ai görünümü.
 export function EditorAIObservabilityPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   return (
     <>
-      <Topbar title="AI observability" />
+      <Topbar title={tn('nav.ai')} />
       <PageShell>
         <div style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12 }}>
-          Editör görünümü: CoSRE yönlendirme raporu. Çağrı ayrıntıları, prompt örnekleri,
-          bütçe ve kalite panelleri yalnız admin.
+          {tn('aiObs.editorIntro')}
         </div>
         <RoutingReportPanel />
       </PageShell>
@@ -76,6 +76,7 @@ export function EditorAIObservabilityPage() {
 }
 
 function AdminAIObservabilityPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const lang = useLang();
   const [range, setRange] = useUrlRange('24h');
   const [stats, setStats] = useState<AIStats | null | undefined>(undefined);
@@ -132,20 +133,20 @@ function AdminAIObservabilityPage() {
   // v0.10.947 (tablo standardı) — hücre görünümü kolon bayraklarında; 11px
   // ikincil hücreler tablo boyunda, hiyerarşi renkle (S3).
   const callCols = useMemo<ColumnDef<AICall>[]>(() => [
-    { id: 'time',     label: 'Time',              sortValue: c => c.createdAt, width: 165, tone: () => 'muted' },
-    { id: 'surface',  label: 'Surface',           sortValue: c => c.surface,   naturalDir: 'asc', flex: true, mono: true },
-    { id: 'model',    label: 'Provider · Model',  sortValue: c => `${c.provider} ${c.model ?? ''}`, naturalDir: 'asc', width: 210 },
-    { id: 'status',   label: 'Status',            sortValue: c => c.status,    naturalDir: 'asc', width: 95 },
-    { id: 'duration', label: 'Duration',          sortValue: c => c.durationMs, numeric: true, width: 105 },
-    { id: 'tokens',   label: 'In / Out tokens',   sortValue: c => c.inputTokens + c.outputTokens, numeric: true, width: 140, tone: () => 'faint' },
+    { id: 'time',     label: t('aiObs.col.time', lang),              sortValue: c => c.createdAt, width: 165, tone: () => 'muted' },
+    { id: 'surface',  label: t('aiObs.col.surface', lang),           sortValue: c => c.surface,   naturalDir: 'asc', flex: true, mono: true },
+    { id: 'model',    label: t('aiObs.col.model', lang),  sortValue: c => `${c.provider} ${c.model ?? ''}`, naturalDir: 'asc', width: 210 },
+    { id: 'status',   label: t('aiObs.col.status', lang),            sortValue: c => c.status,    naturalDir: 'asc', width: 95 },
+    { id: 'duration', label: t('aiObs.col.duration', lang),          sortValue: c => c.durationMs, numeric: true, width: 105 },
+    { id: 'tokens',   label: t('aiObs.col.tokens', lang),   sortValue: c => c.inputTokens + c.outputTokens, numeric: true, width: 140, tone: () => 'faint' },
     // Oran tablosunda olmayan bir model için costForCall null döner;
     // sıralamada -1 ile en dibe iner (bilinmeyen maliyet "ucuz" sayılmasın).
-    { id: 'cost',     label: 'Cost',
+    { id: 'cost',     label: t('aiObs.col.cost', lang),
       sortValue: c => costForCall(rates, c.model, c.inputTokens, c.outputTokens) ?? -1,
       numeric: true, width: 100,
       tone: c => (costForCall(rates, c.model, c.inputTokens, c.outputTokens) === null ? 'faint' : 'muted') },
-    { id: 'user',     label: 'User',              sortValue: c => c.userEmail || c.userId || '', naturalDir: 'asc', width: 175, tone: () => 'faint' },
-  ], [rates]);
+    { id: 'user',     label: t('aiObs.col.user', lang),              sortValue: c => c.userEmail || c.userId || '', naturalDir: 'asc', width: 175, tone: () => 'faint' },
+  ], [rates, lang]);
   const dt = useDataTable<AICall>({
     storageKey: 'ai-calls', columns: callCols, rows: calls ?? [],
     initialSort: { id: 'time', dir: 'desc' },
@@ -159,7 +160,7 @@ function AdminAIObservabilityPage() {
     calls === undefined ? { kind: 'loading' }
     : calls === null ? { kind: 'error' }
     : (surface || provider || status) ? { kind: 'no-match', onClearFilters: clearCallFilters, returnFocusRef: surfaceRef }
-    : { kind: 'empty', message: 'Bu pencerede AI çağrısı yok — Coremetry\'de herhangi bir "✨ Explain" düğmesine tıkla; çağrı buraya düşer.' };
+    : { kind: 'empty', message: tn('aiObs.calls.empty') };
 
   // Pull operator-set rate overrides; merge over the bundled
   // defaults. Done once per mount — rates change infrequently
@@ -213,19 +214,16 @@ function AdminAIObservabilityPage() {
 
   return (
     <>
-      <Topbar title="AI observability" range={range} onRangeChange={setRange} />
+      <Topbar title={tn('nav.ai')} range={range} onRangeChange={setRange} />
       <PageShell>
         <div style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12 }}>
-          Every CoSRE call lands here — latency, tokens, status,
-          per-surface breakdown. Prompt + response samples (≤4KB) are kept
-          for inspection. Admin-only.
+          {tn('aiObs.intro')}
           {/* v0.10.940 — kaynak seçici süzgeç şeridinde, KPI'ların ALTINDA;
               değerlendirme görünümündeyken karoların neyi saydığı üstte de
               yazsın (bütçe karosu hep üretim). */}
           {source === 'evalset' && (
             <div className="field-hint">
-              Kaynak: Değerlendirme — yalnız Settings › CoSRE › Değerlendirme koşularının
-              çağrıları (yüzey evalset-…). Bütçe (24 sa) karosu her zaman üretimi gösterir.
+              {tn('aiObs.evalsetHint')}
             </div>
           )}
         </div>
@@ -233,8 +231,8 @@ function AdminAIObservabilityPage() {
         {/* KPI cards */}
         {stats === undefined && <Spinner />}
         {stats === null && (
-          <Empty icon="✗" title="Failed to load AI stats">
-            Check that CoSRE is configured and that ai_calls table exists.
+          <Empty icon="✗" title={tn('aiObs.statsFailed')}>
+            {tn('aiObs.statsFailedHint')}
           </Empty>
         )}
         {stats && (() => {
@@ -268,30 +266,30 @@ function AdminAIObservabilityPage() {
               display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
               gap: 10, marginBottom: 14,
             }}>
-              <KPI label="Total calls" value={fmtNum(stats.totalCalls)} />
-              <KPI label="Error rate" value={percent(stats.errorRate, lang, { from: 'ratio' })}
+              <KPI label={tn('aiObs.kpi.totalCalls')} value={fmtNum(stats.totalCalls)} />
+              <KPI label={tn('aiObs.kpi.errorRate')} value={percent(stats.errorRate, lang, { from: 'ratio' })}
                 cls={stats.errorRate > 0.1 ? 'err' : stats.errorRate > 0.02 ? 'warn' : 'ok'} />
-              <KPI label="Avg latency" value={duration(stats.avgDurationMs, lang)} />
-              <KPI label="P99 latency" value={duration(stats.p99DurationMs, lang)} />
-              <KPI label="Input tokens" value={fmtNum(stats.inputTokens)} />
-              <KPI label="Output tokens" value={fmtNum(stats.outputTokens)} />
+              <KPI label={tn('aiObs.kpi.avgLatency')} value={duration(stats.avgDurationMs, lang)} />
+              <KPI label={tn('aiObs.kpi.p99Latency')} value={duration(stats.p99DurationMs, lang)} />
+              <KPI label={tn('aiObs.kpi.inputTokens')} value={fmtNum(stats.inputTokens)} />
+              <KPI label={tn('aiObs.kpi.outputTokens')} value={fmtNum(stats.outputTokens)} />
               {/* v0.10.807 (L2) — önek önbelleği: giriş token'ının yüzde kaçı önbellekten geldi.
                   0 iken de gösterilir (kolon varsa): "uç bildirmiyor ya da önbellek kapalı" sinyali. */}
               {stats.cachedCol && (
-                <KPI label="Önbellek (giriş)" value={cachedPctLabel(stats.cachedTokens ?? 0, stats.inputTokens)}
+                <KPI label={tn('aiObs.kpi.cache')} value={cachedPctLabel(stats.cachedTokens ?? 0, stats.inputTokens)}
                   cls={(stats.cachedTokens ?? 0) > 0 ? 'ok' : undefined} />
               )}
-              <KPI label="Est cost" value={totalCostLabel} />
-              <KPI label="Bütçe (24 sa)" value={bv.text} cls={budgetCls(bv)} />
+              <KPI label={tn('aiObs.kpi.estCost')} value={totalCostLabel} />
+              <KPI label={tn('aiObs.kpi.budget')} value={bv.text} cls={budgetCls(bv)} />
               {/* v0.10.421 (E6) — uydurma oranı; v0.10.409'un ilk-token karosu da burada. */}
               {stats.extended && (
-                <KPI label="Kalkan isabeti" value={`${fmtNum(stats.shieldHitCalls ?? 0)} çağrı · ${fmtNum(stats.shieldHits ?? 0)} ad`}
+                <KPI label={tn('aiObs.kpi.shield')} value={tf('aiObs.kpi.shieldValue', lang, { calls: fmtNum(stats.shieldHitCalls ?? 0), names: fmtNum(stats.shieldHits ?? 0) })}
                   cls={(stats.shieldHitCalls ?? 0) > 0 ? 'warn' : 'ok'} />
               )}
               {stats.extended && (stats.avgTtftMs ?? 0) > 0 && (
-                <KPI label="Ort. ilk token" value={duration(stats.avgTtftMs ?? 0, lang)} />
+                <KPI label={tn('aiObs.kpi.ttft')} value={duration(stats.avgTtftMs ?? 0, lang)} />
               )}
-              <KPI label="Users" value={fmtNum(stats.distinctUsers)} />
+              <KPI label={tn('aiObs.kpi.users')} value={fmtNum(stats.distinctUsers)} />
             </div>
 
             {/* Volume + error timeseries */}
@@ -302,7 +300,7 @@ function AdminAIObservabilityPage() {
             {/* Per-surface + per-provider breakdowns */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 12, marginTop: 14 }}>
               {(stats.bySurface ?? []).length > 0 && (
-                <BreakdownTable title="By surface (which Explain button)"
+                <BreakdownTable title={tn('aiObs.bySurface')}
                   rows={(stats.bySurface ?? []).map(r => ({
                     a: r.surface, b: fmtNum(r.calls),
                     c: percent(r.errorRate, lang, { from: 'ratio' }),
@@ -314,18 +312,18 @@ function AdminAIObservabilityPage() {
                       ? `${Math.round((r.thumbsUpRate ?? 0) * 100)}% (${r.feedbackCount})`
                       : '—',
                   }))}
-                  cols={['Surface', 'Calls', 'Err rate', 'Avg ms', 'Memnuniyet']}
+                  cols={[tn('aiObs.bd.surface'), tn('aiObs.bd.calls'), tn('aiObs.bd.errRate'), tn('aiObs.bd.avgMs'), tn('aiObs.bd.satisfaction')]}
                   onPickFirst={v => setSurface(v)} />
               )}
               {(stats.byProvider ?? []).length > 0 && (
-                <BreakdownTable title="By provider · model"
+                <BreakdownTable title={tn('aiObs.byProvider')}
                   rows={(stats.byProvider ?? []).map(r => ({
                     a: `${r.provider} · ${r.model || '—'}`, b: fmtNum(r.calls),
                     // v0.10.400 — model başına hata oranı + p95 gecikme (CoSRE denetimi O5/E3).
                     c: `${percent(r.calls ? (r.errors ?? 0) / r.calls : 0, lang, { from: 'ratio' })} · p95 ${duration(r.p95Ms ?? 0, lang)}`,
                     d: fmtCost(costForCall(rates, r.model, r.inputTokens, r.outputTokens)),
                   }))}
-                  cols={['Provider', 'Calls', 'Hata · p95', 'Est cost']}
+                  cols={[tn('aiObs.bd.provider'), tn('aiObs.bd.calls'), tn('aiObs.bd.errP95'), tn('aiObs.kpi.estCost')]}
                   onPickFirst={v => setProvider(v.split(' · ')[0])} />
               )}
             </div>
@@ -357,41 +355,41 @@ function AdminAIObservabilityPage() {
               yoğunluk kurallarını ve telefondaki iOS 16px kuralını ezerdi;
               sağlayıcı / durum seçicileri de aynı sınıfa geçti. */}
           <select value={source ?? ''} onChange={e => setSource(e.target.value)}
-            aria-label="Kaynak"
+            aria-label={tn('aiObs.source')}
             className="ai-filter-select">
-            <option value="">Üretim</option>
-            <option value="evalset">Değerlendirme</option>
+            <option value="">{tn('aiObs.source.prod')}</option>
+            <option value="evalset">{tn('aiObs.source.eval')}</option>
           </select>
-          <input ref={surfaceRef} type="search" placeholder="Filter by surface…" aria-label="Filter by surface"
+          <input ref={surfaceRef} type="search" placeholder={tn('aiObs.filter.surfacePh')} aria-label={tn('aiObs.filter.surface')}
             data-shortcut-search
             value={surface} onChange={e => setSurface(e.target.value)}
             style={{ fontSize: 12, padding: '3px 8px', width: 200 }} />
           <select value={provider} onChange={e => setProvider(e.target.value)}
-            aria-label="Filter by provider"
+            aria-label={tn('aiObs.filter.provider')}
             className="ai-filter-select">
-            <option value="">All providers</option>
-            <option value="openai">openai</option>
-            <option value="anthropic">anthropic</option>
-            <option value="github">github</option>
+            <option value="">{tn('aiObs.filter.allProviders')}</option>
+            {/* sağlayıcı kimlikleri sunucu değeri — çevrilmez */}
+            {['openai', 'anthropic', 'github'].map(p => <option key={p} value={p}>{p}</option>)}
           </select>
           <select value={status} onChange={e => setStatus(e.target.value)}
-            aria-label="Filter by status"
+            aria-label={tn('aiObs.filter.status')}
             className="ai-filter-select">
-            <option value="">All statuses</option>
-            <option value="ok">ok</option>
-            <option value="error">error</option>
+            <option value="">{tn('aiObs.filter.allStatuses')}</option>
+            {/* ai_calls.status değerleri sunucu sabiti — çevrilmez */}
+            {['ok', 'error'].map(v => <option key={v} value={v}>{v}</option>)}
           </select>
           {(surface || provider || status) && (
             <Button variant="secondary" size="sm"
-              onClick={clearCallFilters}>Clear</Button>
+              onClick={clearCallFilters}>{tn('aiObs.clear')}</Button>
           )}
           <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text3)' }}>
-            {calls ? `${calls.length} call${calls.length === 1 ? '' : 's'}` : ''}
+            {calls ? tf('aiObs.callCount', lang, { n: calls.length }) : ''}
           </span>
           {calls && calls.length > 0 && (
             <Button variant="secondary" size="sm"
               onClick={() => exportCallsCSV(calls, rates)}
-              title="Download the currently-filtered calls as a CSV (with computed cost)">
+              title={tn('aiObs.csvTitle')}>
+              {/* i18n-exempt: dosya biçimi adı */}
               ↓ CSV
             </Button>
           )}
@@ -416,12 +414,12 @@ function AdminAIObservabilityPage() {
                   </DataTableCell>
                   <DataTableCell dt={dt} col="status" row={c}>
                     {c.status === 'ok'
-                      ? <span className="badge b-gray">ok</span>
+                      ? <span className="badge b-gray">ok</span> // i18n-exempt: ai_calls.status değerleri (sunucu sabiti)
                       : <span className="badge b-err">error</span>}
                   </DataTableCell>
                   <DataTableCell dt={dt} col="duration" row={c} value={`${c.durationMs} ms`} />
                   <DataTableCell dt={dt} col="tokens" row={c}
-                    title={c.cachedTokens ? `${c.cachedTokens} giriş token'ı önek önbelleğinden` : undefined}>
+                    title={c.cachedTokens ? tf('aiObs.cachedTitle', lang, { count: c.cachedTokens }) : undefined}>
                     {c.inputTokens}{c.cachedTokens ? <span> ({cachedPctLabel(c.cachedTokens, c.inputTokens)})</span> : null} / {c.outputTokens}
                   </DataTableCell>
                   <DataTableCell dt={dt} col="cost" row={c} value={fmtCost(cost)} />
@@ -438,8 +436,7 @@ function AdminAIObservabilityPage() {
             v0.9.1014'ün `count` sözleşmesiyle aynı dürüstlük kuralı. */}
         {calls && calls.length >= 200 && (
           <div className="pager" style={{ color: 'var(--text3)' }}>
-            son 200 çağrı gösteriliyor — tavana dayandı; daha fazlası için
-            pencereyi daraltın
+            {tn('aiObs.capNote')}
           </div>
         )}
 
@@ -484,6 +481,7 @@ function AdminAIObservabilityPage() {
 // sorunu ve çareleri de farklı.
 function RCAQualityPanel({ range }: { range: TimeRange }) {
   const lang = useLang();
+  const tn = useT();
   const [q, setQ] = useState<RCAVerdictQuality | null | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
@@ -498,42 +496,42 @@ function RCAQualityPanel({ range }: { range: TimeRange }) {
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="ov-card-h">
-        <h3>Kök-neden hakem kalitesi</h3>
+        <h3>{tn('aiObs.rca.title')}</h3>
         <span className="ov-sub">
-          transport değil, CEVABIN kendisi — karar dağılımı, motor sağlığı, operatör yargısı
+          {tn('aiObs.rca.sub')}
         </span>
       </div>
       <div className="ov-card-b">
         {q === undefined && <Spinner />}
-        {q === null && <Empty icon="✗" title="Okunamadı" />}
+        {q === null && <Empty icon="✗" title={tn('aiObs.loadFailed')} />}
         {q && q.total === 0 && (
-          <Empty icon="○" title="Bu pencerede hiç verdict üretilmemiş">
-            Bir problem/anomali kartında ✨ Explain'e basıldığında burada görünür.
+          <Empty icon="○" title={tn('aiObs.rca.empty')}>
+            {tn('aiObs.rca.emptyHint')}
           </Empty>
         )}
         {q && q.total > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-            <KPI label="Verdict" value={fmtNum(q.total)} />
-            <KPI label="Kök neden belirlendi"
+            <KPI label={tn('aiObs.rca.verdict')} value={fmtNum(q.total)} />
+            <KPI label={tn('aiObs.rca.rootCause')}
               value={`${fmtNum(q.rootCauseIdentified)} · ${rcaPctText(q.rootCauseIdentified, q.total)}`} />
-            <KPI label="Olası neden"
+            <KPI label={tn('aiObs.rca.probable')}
               value={`${fmtNum(q.probableCause)} · ${rcaPctText(q.probableCause, q.total)}`} />
             {/* Kanıt yetersiz NÖTR çizilir: bir arıza değil, geçerli
                 bir cevap. Kırmızı yapmak modeli tam da kaçınmasını
                 istemediğimiz yöne — kendinden emin ve yanlış cevaba —
                 iter (prompt ona açıkça "bunu demek ayıp değil" diyor). */}
-            <KPI label="Kanıt yetersiz"
+            <KPI label={tn('aiObs.rca.insufficient')}
               value={`${fmtNum(q.insufficientEvidence)} · ${rcaPctText(q.insufficientEvidence, q.total)}`} />
-            <KPI label="Model çözümlenemedi"
+            <KPI label={tn('aiObs.rca.unparsed')}
               value={`${fmtNum(q.unparsed)} · ${rcaPctText(q.unparsed, q.total)}`}
               cls={rcaEngineTone(q)} />
-            <KPI label="Kalkan devrede"
+            <KPI label={tn('aiObs.rca.shielded')}
               value={`${fmtNum(q.shielded)} · ${rcaPctText(q.shielded, q.total)}`}
               cls={rcaEngineTone(q)} />
-            <KPI label="Onarım gerekti"
+            <KPI label={tn('aiObs.rca.repaired')}
               value={`${fmtNum(q.repaired)} · ${rcaPctText(q.repaired, q.total)}`} />
-            <KPI label="Ortalama güven" value={fixed(q.avgConfidence, 2, lang)} />
-            <KPI label="Operatör memnuniyeti" value={rcaSatisfactionText(q)} />
+            <KPI label={tn('aiObs.rca.avgConf')} value={fixed(q.avgConfidence, 2, lang)} />
+            <KPI label={tn('aiObs.rca.satisfaction')} value={rcaSatisfactionText(q)} />
           </div>
         )}
         {/* v0.10.410 (CoSRE denetimi E4) — güven kalibrasyonu: "0.8 dediğinde
@@ -541,14 +539,14 @@ function RCAQualityPanel({ range }: { range: TimeRange }) {
         {q && q.total > 0 && q.calibration?.length > 0 && (
           <div style={{ marginTop: 12 }}>
             <div className="ov-sub" style={{ marginBottom: 6 }}>
-              Güven kalibrasyonu — kova başına operatör yargısı (yalnız çözümlenmiş verdict'ler)
+              {tn('aiObs.rca.calib')}
               {rcaCalibrationNote(q.calibration) && (
                 <span className="badge b-warn" style={{ marginLeft: 8 }}>{rcaCalibrationNote(q.calibration)}</span>
               )}
             </div>
             <table style={{ width: "auto", minWidth: 420 }}>
               <thead>
-                <tr><th>Güven kovası</th><th>Verdict</th><th>👍</th><th>👎</th><th>Memnuniyet</th></tr>
+                <tr><th>{tn('aiObs.rca.bucket')}</th><th>{tn('aiObs.rca.verdict')}</th><th>👍</th><th>👎</th><th>{tn('aiObs.bd.satisfaction')}</th></tr>
               </thead>
               <tbody>
                 {q.calibration.map(b => (
@@ -595,17 +593,19 @@ function RCAQualityPanel({ range }: { range: TimeRange }) {
 // başına toplar): none işareti + ardından gelen serbest döngü artık tek tur,
 // son rota "Serbest döngü"; yedek zinciri Tür hücresinin title'ında. "Kim"
 // soranların e-postaları (uç yalnız admin; e-postasız eski satır "—").
-const GAP_COLS: ColumnDef<RouterGap>[] = [
-  { id: 'question', label: 'Soru',      sortValue: g => g.question, naturalDir: 'asc', flex: true, mono: true },
-  { id: 'kind',     label: 'Tür',       sortValue: g => g.kind, naturalDir: 'asc', width: 120, tone: () => 'faint' },
-  { id: 'count',    label: 'Kez',       sortValue: g => g.count, numeric: true, width: 80 },
-  { id: 'users',    label: 'Kullanıcı', sortValue: g => g.users, numeric: true, width: 100, tone: () => 'faint' },
-  { id: 'who',      label: 'Kim',       sortValue: g => gapWho(g), naturalDir: 'asc', width: 200, tone: () => 'faint' },
-  { id: 'last',     label: 'Son',       sortValue: g => g.lastAt, width: 165, tone: () => 'faint' },
+const gapCols = (lang: Lang): ColumnDef<RouterGap>[] => [
+  { id: 'question', label: t('aiObs.gapCol.question', lang), sortValue: g => g.question, naturalDir: 'asc', flex: true, mono: true },
+  { id: 'kind',     label: t('aiObs.gapCol.kind', lang), sortValue: g => g.kind, naturalDir: 'asc', width: 120, tone: () => 'faint' },
+  { id: 'count',    label: t('aiObs.gapCol.count', lang), sortValue: g => g.count, numeric: true, width: 80 },
+  { id: 'users',    label: t('aiObs.gapCol.users', lang), sortValue: g => g.users, numeric: true, width: 100, tone: () => 'faint' },
+  { id: 'who',      label: t('aiObs.gapCol.who', lang), sortValue: g => gapWho(g), naturalDir: 'asc', width: 200, tone: () => 'faint' },
+  { id: 'last',     label: t('aiObs.gapCol.last', lang), sortValue: g => g.lastAt, width: 165, tone: () => 'faint' },
 ];
 
 function RouterGapsPanel() {
   const lang = useLang();
+  const tn = useT();
+  const gapColumns = useMemo(() => gapCols(lang), [lang]);
   const [days, setDays] = useState<1 | 7 | 30>(7);
   const [data, setData] = useState<RouterGapsView | null | undefined>(undefined);
   const [kind, setKind] = useState<GapKindFilter>('all'); // v0.10.2465 — tür süzgeci
@@ -618,39 +618,38 @@ function RouterGapsPanel() {
     return () => { cancelled = true; };
   }, [days]);
   const gapRows = useMemo(() => filterGapsByKind(data?.gaps ?? [], kind), [data, kind]);
-  const gapDt = useDataTable<RouterGap>({ storageKey: 'ai-router-gaps', columns: GAP_COLS, rows: gapRows });
+  const gapDt = useDataTable<RouterGap>({ storageKey: 'ai-router-gaps', columns: gapColumns, rows: gapRows });
   // v0.10.954 — tablo standardı T12: durumlar tablonun İÇİNDE, başlık durur.
   const gapState: Omit<DataTableStateProps<RouterGap>, 'dt'> =
     data === undefined ? { kind: 'loading' }
     : data === null ? { kind: 'error' }
-    : { kind: 'empty', message: 'Bu pencerede serbest döngüye düşen soru yok — router her soruyu yakalamış.' };
+    : { kind: 'empty', message: tn('aiObs.gaps.empty') };
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="ov-card-h">
-        <h3>Router boşlukları</h3>
+        <h3>{tn('aiObs.gaps.title')}</h3>
         <span className="ov-sub">
-          guided intent'e OTURMAYAN sorular — serbest tool döngüsüne düştüler, sınıflandırıcı «none» dedi ya da netleştirme sorusu aldılar
+          {tn('aiObs.gaps.sub')}
         </span>
         <span style={{ marginLeft: 'auto' }}>
-          <SegmentedControl size="sm" aria-label="Gün penceresi" value={String(days)}
+          <SegmentedControl size="sm" aria-label={tn('aiObs.gaps.window')} value={String(days)}
             onChange={v => setDays(v === '30' ? 30 : v === '7' ? 7 : 1)}
-            options={([1, 7, 30] as const).map(d => ({ value: String(d), label: `${d}g` }))} />
+            options={([1, 7, 30] as const).map(d => ({ value: String(d), label: tf('aiObs.gaps.days', lang, { d }) }))} />
         </span>
       </div>
       <div className="ov-card-b">
         {data && data.gaps.length > 0 && (
           <div style={{ fontSize: 11.5, color: 'var(--text2)', marginBottom: 8 }}>
-            Toplam <b>{count(data.totalFallbacks, lang)}</b> soru serbest döngüye
-            düştü, <b>{count(data.totalGeneral, lang)}</b> soru genel cevaba gitti
-            (sınıflandırıcı «none»), <b>{count(data.totalClarify ?? 0, lang)}</b> soru
-            netleştirme sorusu aldı (kaynak sorusu, LLM'siz). Sık tekrarlayanlar yeni bir guided intent adayıdır:
-            deterministik prefetch + tek anlatım çağrısı, N turluk tool döngüsünden hem
-            ucuz hem tutarlı olur.
+            {tfNodes(t('aiObs.gaps.summary', lang), {
+              fallbacks: <b>{count(data.totalFallbacks, lang)}</b>,
+              general: <b>{count(data.totalGeneral, lang)}</b>,
+              clarify: <b>{count(data.totalClarify ?? 0, lang)}</b>,
+            })}
           </div>
         )}
         {data && data.gaps.length > 0 && (
           <div style={{ marginBottom: 8 }}>
-            <SegmentedControl size="sm" aria-label="Tür" value={kind}
+            <SegmentedControl size="sm" aria-label={tn('aiObs.gapCol.kind')} value={kind}
               onChange={v => setKind(v as GapKindFilter)} options={gapKindOptions(data.gaps)} />
           </div>
         )}
@@ -680,15 +679,18 @@ function RouterGapsPanel() {
 // v0.10.947 (tablo standardı T1) — sunucu LIMIT 100: kayıt listesi,
 // useDataTable; initialSort yok (sunucu sırası). Satırın "Cevap" ipucu
 // Soru hücresine taşındı (T7: veri ipucu değeri gösteren hücrede).
-const NEG_COLS: ColumnDef<NegativeFeedbackCall>[] = [
-  { id: 'surface', label: 'Yüzey',    sortValue: r => r.surface, naturalDir: 'asc', width: 190 },
-  { id: 'prompt',  label: 'Soru',     sortValue: r => r.prompt, naturalDir: 'asc', flex: true, mono: true },
-  { id: 'comment', label: 'Yorum',    sortValue: r => r.comment ?? '', naturalDir: 'asc', width: 280 },
-  { id: 'when',    label: 'Ne zaman', sortValue: r => r.createdAt, width: 165, tone: () => 'faint' },
-  { id: 'who',     label: 'Kim',      sortValue: r => r.userEmail ?? '', naturalDir: 'asc', width: 175, tone: () => 'faint' },
+const negCols = (lang: Lang): ColumnDef<NegativeFeedbackCall>[] => [
+  { id: 'surface', label: t('aiObs.col.surface', lang), sortValue: r => r.surface, naturalDir: 'asc', width: 190 },
+  { id: 'prompt',  label: t('aiObs.gapCol.question', lang), sortValue: r => r.prompt, naturalDir: 'asc', flex: true, mono: true },
+  { id: 'comment', label: t('aiObs.negCol.comment', lang), sortValue: r => r.comment ?? '', naturalDir: 'asc', width: 280 },
+  { id: 'when',    label: t('aiObs.negCol.when', lang), sortValue: r => r.createdAt, width: 165, tone: () => 'faint' },
+  { id: 'who',     label: t('aiObs.gapCol.who', lang), sortValue: r => r.userEmail ?? '', naturalDir: 'asc', width: 175, tone: () => 'faint' },
 ];
 
 function NegativeFeedbackPanel() {
+  const lang = useLang();
+  const tn = useT();
+  const negColumns = useMemo(() => negCols(lang), [lang]);
   const [rows, setRows] = useState<NegativeFeedbackCall[] | null | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
@@ -697,23 +699,24 @@ function NegativeFeedbackPanel() {
       .catch(() => { if (!cancelled) setRows(null); });
     return () => { cancelled = true; };
   }, []);
-  const negDt = useDataTable<NegativeFeedbackCall>({ storageKey: 'ai-negative-feedback', columns: NEG_COLS, rows: rows ?? [] });
+  const negDt = useDataTable<NegativeFeedbackCall>({ storageKey: 'ai-negative-feedback', columns: negColumns, rows: rows ?? [] });
   // v0.10.954 — tablo standardı T12: durumlar tablonun İÇİNDE, başlık durur.
   const negState: Omit<DataTableStateProps<NegativeFeedbackCall>, 'dt'> =
     rows === undefined ? { kind: 'loading' }
     : rows === null ? { kind: 'error' }
-    : { kind: 'empty', message: 'Son 7 günde 👎 yok' };
+    : { kind: 'empty', message: tn('aiObs.neg.empty') };
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="ov-card-h">
-        <h3>👎 alan cevaplar</h3>
-        <span className="ov-sub">son 7 gün — yeni guided-intent adayları buradan çıkar</span>
+        <h3>{tn('aiObs.neg.title')}</h3>
+        <span className="ov-sub">{tn('aiObs.neg.sub')}</span>
         {/* v0.10.423 (CoSRE denetimi E5) — evalset vakası olarak indir;
             prompt gövdeleri sistemi terk eder (audit'li), repoya ELLE alınır. */}
         {rows && rows.length > 0 && (
           <Button variant="secondary" size="sm" style={{ marginLeft: 'auto' }}
             onClick={() => { api.aiEvalsetExport().catch(() => { /* hata: indirme olmaz, sayfa bozulmaz */ }); }}
-            title="Bu 👎 satırlarını coremetry.evalset/1 JSON'u olarak indir (internal/copilot/evalset/ için ham malzeme)">
+            title={tn('aiObs.neg.exportTitle')}>
+            {/* i18n-exempt: dosya biçimi adı */}
             ↓ Evalset (JSON)
           </Button>
         )}
@@ -728,7 +731,7 @@ function NegativeFeedbackPanel() {
                 <tr key={i}>
                   <DataTableCell dt={negDt} col="surface" row={r}><span className="badge b-gray">{r.surface || '—'}</span></DataTableCell>
                   <DataTableCell dt={negDt} col="prompt" row={r} value={r.prompt || null}
-                    title={r.response ? `Cevap: ${r.response.slice(0, 400)}` : undefined} />
+                    title={r.response ? tf('aiObs.neg.answerTitle', lang, { text: r.response.slice(0, 400) }) : undefined} />
                   {/* v0.9.1193 — 👎'nin NEDENİ. Kırpma title'da tamamlanır;
                       yorum çoğu satırda boş kalacak (opsiyonel), '—' ile
                       "yorum yazılmadı" dürüstçe görünür. */}
@@ -812,6 +815,7 @@ function BreakdownTable({ title, rows, cols, onPickFirst }: {
 // is one path per series and there's no need to pay the bundle
 // cost of recharts/visx.
 function CallsChart({ series }: { series: AICallsTimePoint[] }) {
+  const tn = useT();
   const W = 1000, H = 140, PAD = 24;
   const xs = useMemo(() => series.map(p => p.time), [series]);
   const minT = xs[0] ?? 0;
@@ -839,9 +843,9 @@ function CallsChart({ series }: { series: AICallsTimePoint[] }) {
         display: 'flex', gap: 14, fontSize: 11, color: 'var(--text3)',
         marginBottom: 4, paddingLeft: PAD,
       }}>
-        <span><span style={{ color: 'var(--accent2)' }}>━</span> calls</span>
-        <span><span style={{ color: 'var(--err)' }}>━</span> errors</span>
-        <span><span style={{ color: 'var(--warn)' }}>━</span> avg latency (ms)</span>
+        <span><span style={{ color: 'var(--accent2)' }}>━</span> {tn('aiObs.chart.calls')}</span>
+        <span><span style={{ color: 'var(--err)' }}>━</span> {tn('aiObs.chart.errors')}</span>
+        <span><span style={{ color: 'var(--warn)' }}>━</span> {tn('aiObs.chart.latency')}</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H}
         preserveAspectRatio="none"
@@ -858,6 +862,7 @@ function CallsChart({ series }: { series: AICallsTimePoint[] }) {
 // v0.8.495 (sadeleştirme #2) — kabuk ui/Drawer'a taşındı: Esc/overlay/✕
 // davranışı tek evden; içerik (Kv grid + örnek pre blokları) birebir.
 function CallDrawer({ call, rates, onClose }: { call: AICall; rates: AIRateTable; onClose: () => void }) {
+  const tn = useT();
   const cost = costForCall(rates, call.model, call.inputTokens, call.outputTokens);
   return (
     <Drawer onClose={onClose} width={680} header={
@@ -873,14 +878,14 @@ function CallDrawer({ call, rates, onClose }: { call: AICall; rates: AIRateTable
     }>
         <div style={{ paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
-            <Kv k="Time" v={tsLong(call.createdAt)} />
-            <Kv k="Input tok" v={String(call.inputTokens)} />
-            <Kv k="Output tok" v={String(call.outputTokens)} />
-            <Kv k="Est cost" v={fmtCost(cost)} />
-            <Kv k="Prompt chars" v={String(call.promptChars)} />
-            <Kv k="Resp chars" v={String(call.responseChars)} />
-            <Kv k="User" v={call.userEmail || call.userId || '—'} />
-            {call.baseUrl && <Kv k="Base URL" v={call.baseUrl} />}
+            <Kv k={tn('aiObs.col.time')} v={tsLong(call.createdAt)} />
+            <Kv k={tn('aiObs.drawer.inputTok')} v={String(call.inputTokens)} />
+            <Kv k={tn('aiObs.drawer.outputTok')} v={String(call.outputTokens)} />
+            <Kv k={tn('aiObs.kpi.estCost')} v={fmtCost(cost)} />
+            <Kv k={tn('aiObs.drawer.promptChars')} v={String(call.promptChars)} />
+            <Kv k={tn('aiObs.drawer.respChars')} v={String(call.responseChars)} />
+            <Kv k={tn('aiObs.col.user')} v={call.userEmail || call.userId || '—'} />
+            {call.baseUrl && <Kv k={tn('aiObs.drawer.baseUrl')} v={call.baseUrl} />}
           </div>
           {/* v0.10.1463 (CoSRE D1) — çağrının self-telemetri trace'i: yalnız
               örneklenmiş (sorgulanabilir) trace'te dolu; arka plan anlatımında
@@ -891,40 +896,48 @@ function CallDrawer({ call, rates, onClose }: { call: AICall; rates: AIRateTable
           {call.traceId && (
             <div style={{ fontSize: 12 }}>
               {call.traceQueryable
-                ? <Link to={traceHref(call.traceId)} title="Coremetry self-telemetry trace of this call">Trace</Link>
-                : <span title="trace harici collector'da — bu Coremetry'de sorgulanamaz" style={{ color: 'var(--text3)' }}>Trace (harici collector)</span>}
+                ? <Link to={traceHref(call.traceId)} title={tn('aiObs.drawer.traceTitle')}>{tn('aiObs.drawer.trace')}</Link>
+                : <span title={tn('aiObs.drawer.traceExternalTitle')} style={{ color: 'var(--text3)' }}>{tn('aiObs.drawer.traceExternal')}</span>}
               <span className="mono" style={{ marginLeft: 8, color: 'var(--text3)' }}>{call.traceId}</span>
             </div>
           )}
           {call.errorMsg && (
-            <Section title="Error">
+            <Section title={tn('aiObs.drawer.error')}>
               <pre style={{
                 margin: 0, fontSize: 12, color: 'var(--err)',
                 whiteSpace: 'pre-wrap', wordBreak: 'break-word',
               }}>{call.errorMsg}</pre>
             </Section>
           )}
-          <Section title="Prompt (sample)">
+          <Section title={tn('aiObs.drawer.prompt')}>
             <pre style={{
               margin: 0, fontSize: 12,
               whiteSpace: 'pre-wrap', wordBreak: 'break-word',
               maxHeight: 280, overflowY: 'auto',
               background: 'var(--bg2)', padding: 10, borderRadius: 4,
               border: '1px solid var(--border)',
-            }}>{call.promptSample || '(empty)'}</pre>
+            }}>{call.promptSample || tn('aiObs.drawer.empty')}</pre>
           </Section>
-          <Section title="Response (sample)">
+          <Section title={tn('aiObs.drawer.response')}>
             <pre style={{
               margin: 0, fontSize: 12,
               whiteSpace: 'pre-wrap', wordBreak: 'break-word',
               maxHeight: 280, overflowY: 'auto',
               background: 'var(--bg2)', padding: 10, borderRadius: 4,
               border: '1px solid var(--border)',
-            }}>{call.responseSample || '(empty)'}</pre>
+            }}>{call.responseSample || tn('aiObs.drawer.empty')}</pre>
           </Section>
         </div>
     </Drawer>
   );
+}
+
+// tfNodes — tf'nin JSX hâli: {ad} yer tutucularına düğüm (kalın sayı) koyar.
+function tfNodes(tpl: string, vars: Record<string, React.ReactNode>): React.ReactNode[] {
+  return tpl.split(/(\{\w+\})/).map((part, i) => {
+    const m = /^\{(\w+)\}$/.exec(part);
+    return m && m[1] in vars ? <Fragment key={i}>{vars[m[1]]}</Fragment> : part;
+  });
 }
 
 // Section — DrawerSection'ın ince sarmalayıcısı; yerel kopya v0.8.495'te

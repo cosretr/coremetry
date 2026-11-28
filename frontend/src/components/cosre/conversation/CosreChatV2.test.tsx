@@ -32,6 +32,8 @@ import '@/test/radixJsdom';
 vi.mock('@/components/ai/TraceExplainNudge', () => ({ TraceExplainNudge: () => null }));
 
 import { CosreChatV2 } from './CosreChatV2';
+import { setUserLang } from '@/lib/i18n';
+// v0.10.2486 dilim 2 — metinler katalogda; bu test Türkçe arayüzü pinler.
 
 let host: HTMLDivElement | null = null;
 let root: Root | null = null;
@@ -72,8 +74,10 @@ beforeEach(() => {
   vi.spyOn(api, 'problems').mockResolvedValue({ items: [], total: 0, truncated: false } as never);
   vi.spyOn(api, 'aiConversations').mockResolvedValue([] as never);
   vi.spyOn(api, 'copilotStarters').mockResolvedValue({ groups: [] } as never);
+  setUserLang('tr'); // v0.10.2486 dilim 2 — Türkçe arayüz (localStorage saplamasından sonra)
 });
 afterEach(async () => {
+  setUserLang(null);
   await act(async () => { root?.unmount(); });
   host?.remove();
   root = null; host = null; setSp = null; readSp = null;

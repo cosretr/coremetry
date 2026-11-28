@@ -10,8 +10,10 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { ChatMarkdown } from '@/components/ai/ChatBubble';
 import { api } from '@/lib/api';
 import { fmtDateTime } from '@/lib/utils';
+import { useT } from '@/lib/i18n';
 
 export default function CoSREShared() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const { id = '' } = useParams();
   const [params] = useSearchParams();
   const token = params.get('t') ?? '';
@@ -23,7 +25,7 @@ export default function CoSREShared() {
   });
   return (
     <>
-      <Topbar title="Paylaşılan CoSRE sohbeti" />
+      <Topbar title={tn('page.cosreShared')} />
       <PageShell>
         {!id || !token ? (
           <Empty icon="🔗" title="Bağlantı eksik">Paylaşım bağlantısı kimlik ve sır taşımalı.</Empty>

@@ -60,7 +60,7 @@ vi.mock('./alerts/NoisyRulesPanel', () => ({ NoisyRulesPanel: () => null }));
 
 import AlertsPage from './Alerts';
 // v0.10.2258 — tablo durum metinleri / rozet arayüz dilinde; bu dosya Türkçe metni pinler.
-vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
+vi.mock('@/lib/i18n', async (orig) => { const m = await orig<typeof import('@/lib/i18n')>(); return { ...m, useLang: () => 'tr' as const, useT: () => (k: string) => m.t(k, 'tr') }; }); // v0.10.2486 — sayfa useT kullanıyor
 
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -115,17 +115,17 @@ describe('/alerts — durumlar tablonun içinde (v0.10.967)', () => {
     expect(el.querySelectorAll('table thead th').length).toBeGreaterThan(0);
   });
 
-  it('boş: mesaj + "+ New rule" CTA detail yuvasında, tek hücrede; tık formu açar', async () => {
+  it('boş: mesaj + "+ Yeni kural" CTA (v0.10.2486 — metinler katalogda, test TR arayüzde) detail yuvasında, tek hücrede; tık formu açar', async () => {
     const el = await mount();
     const row = stateRow(el)!;
     expect(row.dataset.dtState).toBe('empty');
     expect(row.querySelectorAll('td').length).toBe(1);
     expect(row.textContent).toContain('Alarm kuralı yok');
     const cta = row.querySelector('[data-dt-state-detail] button') as HTMLButtonElement;
-    expect(cta?.textContent).toContain('+ New rule');
-    expect(button(el, 'Save rule')).toBeUndefined();
+    expect(cta?.textContent).toContain('+ Yeni kural');
+    expect(button(el, 'Kuralı kaydet')).toBeUndefined();
     await click(cta);
-    expect(button(el, 'Save rule')).toBeDefined();
+    expect(button(el, 'Kuralı kaydet')).toBeDefined();
   });
 
   it('viewer: boş satırda CTA yok (yazma yetkisi yok)', async () => {
@@ -143,7 +143,7 @@ describe('/alerts — durumlar tablonun içinde (v0.10.967)', () => {
     expect(row.textContent).toContain('upstream 502');
     expect(row.textContent).toContain('boş kural kümesi değil');
     // Hata dalında boş-durum CTA'sı YOK (v0.9.858).
-    expect(row.textContent).not.toContain('+ New rule');
+    expect(row.textContent).not.toContain('+ Yeni kural');
     const before = m.calls;
     m.fail = false; m.rules = [rule('a')];
     await click(button(row, '↻ Retry')!);
@@ -171,7 +171,7 @@ describe('/alerts — durumlar tablonun içinde (v0.10.967)', () => {
     expect(row.dataset.dtState).toBe('no-match');
     expect(row.textContent).toContain('Watcher türünde alarm kuralı yok');
     // CTA eşleşme-yok satırında da korunur (eski Empty her iki durumda basıyordu).
-    expect(row.querySelector('[data-dt-state-detail] button')?.textContent).toContain('+ New rule');
+    expect(row.querySelector('[data-dt-state-detail] button')?.textContent).toContain('+ Yeni kural');
     await click(button(row, 'Filtreleri temizle')!);
     expect(stateRow(el)).toBeNull();
     expect(dataRows(el)).toBe(2);
@@ -203,10 +203,10 @@ describe('/alerts — yerleşikler varsayılan kapalı (v0.10.1069)', () => {
     expect(stateRow(el)).toBeNull();
     expect(dataRows(el)).toBe(2);
     for (const tr of el.querySelectorAll('table tbody tr')) {
-      expect(tr.textContent).toContain('BUILT-IN');
-      expect(tr.textContent).toContain('OFF');
-      expect(button(tr as HTMLElement, 'Enable')).toBeDefined();
-      expect(button(tr as HTMLElement, 'Disable')).toBeUndefined();
+      expect(tr.textContent).toContain('YERLEŞİK');
+      expect(tr.textContent).toContain('KAPALI');
+      expect(button(tr as HTMLElement, 'Etkinleştir')).toBeDefined();
+      expect(button(tr as HTMLElement, 'Devre dışı bırak')).toBeUndefined();
     }
     // Eski "ship pre-configured" cümlesi yalan söylemesin.
     expect(el.textContent).not.toContain('pre-configured');
@@ -218,7 +218,7 @@ describe('/alerts — yerleşikler varsayılan kapalı (v0.10.1069)', () => {
     const el = await mount();
     expect(note(el)?.textContent).toBe(NOTE);
     expect(dataRows(el)).toBe(1);
-    expect(button(el, 'Enable')).toBeUndefined();
+    expect(button(el, 'Etkinleştir')).toBeUndefined();
   });
 
   it('yerleşik satır yok: not basılmaz', async () => {

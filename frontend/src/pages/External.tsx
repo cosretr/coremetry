@@ -17,6 +17,7 @@ import { ExternalPaths } from '@/components/ExternalPaths';
 import type { ExternalCaller, ExternalHost, ExternalHostDetail, TimeRange } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { useT } from '@/lib/i18n';
 
 // /external — third-party API inventory (v0.8.446, SigNoz/Uptrace
 // gap-closure Wave 3 / A1). One row per external destination the
@@ -64,6 +65,7 @@ const CALLER_COLS: ColumnDef<ExternalCaller>[] = [
 ];
 
 export default function ExternalPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   // Memoized on range identity — the v0.5.184 incident shape.
   const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
@@ -124,7 +126,7 @@ export default function ExternalPage() {
 
   return (
     <>
-      <Topbar title="External APIs" range={range} onRangeChange={setRange} />
+      <Topbar title={tn('nav.external')} range={range} onRangeChange={setRange} />
       <PageShell>
         <div style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12 }}>
           Third-party dependencies discovered from outbound client spans

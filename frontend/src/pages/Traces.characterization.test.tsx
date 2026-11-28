@@ -158,6 +158,8 @@ afterEach(() => {
 
 const LABEL: Record<string, string> = {
   'Start time': 'time', Service: 'service', Name: 'operation', Duration: 'duration', Status: 'status', Spans: 'spans',
+  // v0.10.2486 dilim 2 — test TR arayüzde koşar; başlıklar katalogda (tracesP.col.*)
+  'Başlangıç': 'time', Servis: 'service', Ad: 'operation', 'Süre': 'duration', Durum: 'status', Span: 'spans',
 };
 const vt = () => host!.querySelector('.vt-scroll') as HTMLDivElement;
 const listTable = () => vt().querySelector('table') as HTMLTableElement;

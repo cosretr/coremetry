@@ -12,10 +12,10 @@ export function fmt(s: string, vars: Record<string, string | number>): string {
   return s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }
 
-/** Kaynak (çoğul ürün yüzeyi) adları — iki dilde aynı. */
-export const SOURCE_NAME: Record<SearchResultType, string> = {
-  service: 'Services', endpoint: 'Endpoints', problem: 'Problems',
-  exception: 'Exceptions', trace: 'Traces', log: 'Logs',
+/** Kaynak (çoğul ürün yüzeyi) adları — v0.10.2486 dilim 2: menüyle aynı anahtar. */
+export const SOURCE_NAME_KEY: Record<SearchResultType, string> = {
+  service: 'nav.services', endpoint: 'nav.endpoints', problem: 'nav.inbox',
+  exception: 'nav.problems', trace: 'nav.traces', log: 'nav.logs',
 };
 
 export type SourceNoteTone = 'warn' | 'muted';
@@ -27,7 +27,7 @@ export const NEEDS_SERVICE_REASON = 'needs service or trace id';
 export function sourceNote(
   type: SearchResultType, st: SearchSourceStatus, t: (k: string) => string,
 ): SourceNote | null {
-  const src = SOURCE_NAME[type];
+  const src = t(SOURCE_NAME_KEY[type]);
   switch (st.status) {
     case 'unavailable':
       return { type, tone: 'warn', text: fmt(t('search.src.unavailable'), { src, reason: st.reason || 'query failed' }) };

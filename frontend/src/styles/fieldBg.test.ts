@@ -143,7 +143,7 @@ describe('arama kutuları --field-bg okuyor', () => {
 
   it('Trace detayı "Filter spans…" ve komut paleti girdileri --field-bg', () => {
     const trace = readSrc('pages/Trace.tsx');
-    const i = trace.indexOf('placeholder="Filter spans (name, service, attr value)…"');
+    const i = trace.indexOf("placeholder={t('traceD.filter.ph')}"); // v0.10.2486 — katalogda
     expect(i).toBeGreaterThan(0);
     expect(trace.slice(i, trace.indexOf('/>', i))).toContain("background: 'var(--field-bg)'");
     // v0.10.1658 (etkileşim P2): palet cmdk'de — tek girdi shadcn CommandInput,

@@ -13452,6 +13452,8 @@ export interface MLDetectorScore {
   /** Haftalık etiket kuyruğundan verilen oylar (organikten ayrı). */
   queue?: { n: number; correct: number; wilsonLo: number; wilsonHi: number };
   medianLabelSec?: number; labellers?: number; worstSvc?: string; worstSvcShare?: number;
+  /** v0.10.2486 — kurala girebilen etiketlerin farklı gün sayısı (B.2 ≥ 5 gün). */
+  labelDays?: number;
   linkedShortAuto?: number; shortAutoShare?: number;
   /** n < 20 ya da kapsama < %5 → "karar için yetersiz" (gri). */
   insufficient?: boolean;
@@ -13562,6 +13564,30 @@ export interface MLConfig {
   publishGates?: MLGatesMode;
   /** v0.10.2476: günlük tekrarlayan consumer lag Problem'i P3; yok = açık. */
   lagDailyPattern?: boolean;
+  /** v0.10.2486: otomatik gölge kuralı (precision B.2); yok = varsayılan (shadow). */
+  precisionShadow?: MLPrecisionShadow;
+}
+/** v0.10.2486 — `ml.precisionShadow` (Go chstore.MLPrecisionShadow). */
+export type MLPrecisionMode = 'off' | 'shadow' | 'on';
+export interface MLPrecisionShadow {
+  mode: MLPrecisionMode; minLabels: number; demoteUpper: number; restoreLower: number;
+  windowDays: number; maxPerDay: number; maxShare: number; pins: Record<string, 'on' | 'shadow'>;
+}
+/** v0.10.2486 — günlük değerlendirme kaydı (Go chstore.MLPrecisionRecord). */
+export interface MLPrecisionRecord {
+  day: string; at: number; detector: string; outcome: string; reason: string;
+  n: number; correct: number; wrong: number; lower: number; upper: number; window: number; mode: string;
+  problemsFed: number; problemsReal: number;
+}
+export type MLPrecisionStatus = 'on' | 'would_demote' | 'shadow' | 'pinned';
+/** v0.10.2486 — karne zarfındaki gölge kuralı bloğu (Go api.mlPrecisionView). */
+export interface MLPrecisionView {
+  mode: MLPrecisionMode; settings: MLPrecisionShadow;
+  detectors: Record<string, { status: MLPrecisionStatus; pin?: string; since?: number; reason?: string }>;
+  records: MLPrecisionRecord[] | null;
+  fed: Record<string, { fed: number; real: number }>;
+  wouldDemote: string[] | null;
+  lastEvalAt?: number; lastError?: string;
 }
 /** v0.10.1886 — önerilen ML kurulumu (GET /api/admin/ml/recommended; salt-okunur). */
 export interface MLSourceCheck { id: string; label: string; checked: boolean; present: boolean; note?: string }
@@ -13678,6 +13704,8 @@ export interface MLScorecard {
   windowDays: number; detectors: MLDetectorScore[]; bySignal?: MLDetectorScore[]; backfill?: MLBackfillProgress[];
   /** v0.10.2067: dedektör → açık mı (ana anahtar VE dedektör); eski terfi kapısı (gates/promotion) kalktı. */
   enabled?: Record<string, boolean>; signals: Record<string, string>;
+  /** v0.10.2486: otomatik gölge kuralı (yalnız rapor kipi varsayılan). */
+  precisionShadow?: MLPrecisionView;
 }
 
 // ── Login özeti (v0.10.1907) — GET /api/public/login-summary (kimliksiz; Go

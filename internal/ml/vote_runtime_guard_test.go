@@ -6,6 +6,11 @@ package ml
 // sürmez. Yapısal bekçi: aşağıdaki paketlerin üretim kodu oy okuyucularını
 // çağıramaz, SQL'de anomaly_verdicts geçemez. Tek istisna backtest puanlaması
 // (Backtest → MLLabels → scoreHits; simüle taban etiketsiz kurulur).
+// v0.10.2486 — operatör kararı 2026-11-27 (precision programı Kararlar 1;
+// DECISIONS 2026-11-28): TEK ek okuyucu otomatik gölge kuralı
+// (precision_shadow.go → MLScorecard: olay oyu + onaylı vaka, kural
+// dosyasında). CoSRE 👍/👎 bekçisi (TestVotesNeverReachRuntimeDecisions)
+// değişmez.
 // Problem kararları ("Problem değil", problem_verdicts) bu kuralın konusu
 // değildir — ayrı karar.
 
@@ -28,9 +33,11 @@ var voteReaders = map[string]bool{
 	"EnrichAnomaliesWithVerdicts": true,
 }
 
-// voteReadAllowed — dosya (repo-göreli) → izinli okuyucu. Yalnız puanlama.
+// voteReadAllowed — dosya (repo-göreli) → izinli okuyucu. Backtest puanlaması
+// ve otomatik gölge kuralı (tek istisna; başka dosya eklenmez).
 var voteReadAllowed = map[string]map[string]bool{
-	"internal/ml/backtest.go": {"MLLabels": true},
+	"internal/ml/backtest.go":         {"MLLabels": true},
+	"internal/ml/precision_shadow.go": {"MLScorecard": true},
 }
 
 func TestAnomalyVotesDoNotReachRuntime(t *testing.T) {

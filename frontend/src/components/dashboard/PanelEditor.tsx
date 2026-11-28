@@ -21,50 +21,52 @@ import { TOPN_SERVER_CAP } from './topN';
 // the same rgb() literals as PanelRenderer, so the editor swatch and the
 // rendered panel were two independent sources that could (and did) drift.
 import { THRESHOLD_COLOURS } from './panelChrome';
+import { tf, useLang, useT } from '@/lib/i18n';
 import { SPAN_CHOICES, panelSpan, widthForSpan } from '@/components/coremetry/dashboard/grid';
 
+// i18n anahtarları (render'da tn ile çevrilir).
 const TYPE_LABELS: Record<PanelType, string> = {
-  metric:     'Metric (line)',
-  spanmetric: 'Span aggregation (line)',
-  stat:       'Stat (single value)',
+  metric:     'panelEd.type.metric',
+  spanmetric: 'panelEd.type.spanmetric',
+  stat:       'panelEd.type.stat',
   // v0.6.19 — semicircle dial. Best for bounded metrics where
   // the operator wants the at-a-glance "where am I in the safe
   // / warning / breached bands". Same data source pattern as
   // Stat — point either at a metric_points key or a span agg.
-  gauge:      'Gauge (semicircle dial)',
+  gauge:      'panelEd.type.gauge',
   // v0.9.109 (C2) — time×bucket latency density for a histogram metric.
   // Reuses the LatencyHeatmap viz + /api/metrics/histogram (the F3 machine).
-  heatmap:    'Heatmap (latency density)',
+  heatmap:    'panelEd.type.heatmap',
   // v0.9.117 (F4) — a chart driven by a raw PromQL query.
   // v0.9.1157 — "/ MetricsQL": on a VictoriaMetrics install the query goes
   // to VM VERBATIM (no pre-validating parser), so MetricsQL extensions
   // work. Label text only — the field, the endpoint and the ClickHouse
   // path are unchanged.
-  promql:     'PromQL / MetricsQL query',
+  promql:     'panelEd.type.promql',
   // v0.9.781 — ranked bars over the whole window (Datadog "Top List").
-  topn:       'Top-N bar',
-  markdown:   'Markdown / notes',
-  row:        'Row (collapsible group)',
+  topn:       'panelEd.type.topn',
+  markdown:   'panelEd.type.markdown',
+  row:        'panelEd.type.row',
 };
 
 // v0.10.1999 (dilim 3.5) — 12 kolon basamakları; seçim `span` yazar ve
 // `width`ı en yakın eski basamağa eşitler (grid.ts widthForSpan).
 const SPAN_LABELS: Record<number, string> = {
-  3: '3/12 (çeyrek)',
-  4: '4/12 (üçte bir)',
-  6: '6/12 (yarım)',
-  8: '8/12 (üçte iki)',
-  9: '9/12 (dörtte üç)',
-  12: '12/12 (tam satır)',
+  3: 'panelEd.span.3',
+  4: 'panelEd.span.4',
+  6: 'panelEd.span.6',
+  8: 'panelEd.span.8',
+  9: 'panelEd.span.9',
+  12: 'panelEd.span.12',
 };
 
 // v0.9.778 — panel body height. Grafana lets you drag any pixel value; three
 // rungs keep a dashboard reading as a grid instead of a ragged wall, and the
 // grid's row-stretch does the rest (a tall panel lifts its whole row).
 const HEIGHT_LABELS: Record<PanelHeight, string> = {
-  s: 'Short (S)',
-  m: 'Regular (M)',
-  l: 'Tall (L)',
+  s: 'panelEd.height.s',
+  m: 'panelEd.height.m',
+  l: 'panelEd.height.l',
 };
 
 const SPAN_AGGS = ['count', 'rate', 'errors', 'error_rate', 'avg', 'sum', 'min', 'max',
@@ -80,6 +82,7 @@ function StepSelect({ value, onChange }: {
   value: number | undefined;
   onChange: (v: number | undefined) => void;
 }) {
+  const tn = useT();
   return (
     <select value={value ?? 0}
       onChange={e => {
@@ -87,7 +90,7 @@ function StepSelect({ value, onChange }: {
         onChange(v > 0 ? v : undefined);
       }}>
       {STEP_OPTIONS.map(o => (
-        <option key={o.v} value={o.v}>{o.v === 0 ? 'Auto (fit width)' : o.label}</option>
+        <option key={o.v} value={o.v}>{o.v === 0 ? tn('panelEd.stepAuto') : o.label}</option>
       ))}
     </select>
   );
@@ -122,6 +125,7 @@ export function PanelEditor({ panel, onChange, onDone, onCancel, onDelete, previ
   // Height is meaningless for the two types that have no fixed body: a row is
   // a layout marker, markdown flows with its text.
   const showHeight = panel.type !== 'row' && panel.type !== 'markdown';
+  const tn = useT();
 
   return (
     <PanelEditLayout title={panel.title} onTitle={v => update('title', v)} dashboardName={dashboardName}
@@ -132,9 +136,9 @@ export function PanelEditor({ panel, onChange, onDone, onCancel, onDelete, previ
             panel title on the dashboard. Blank string is normalized back to
             undefined so clearing the box removes the field rather than
             saving an empty one (which would render a dot with no tooltip). */}
-        <Field label="Description (optional — shown as ⓘ on the panel)">
+        <Field label={tn('panelEd.description')}>
           <input value={panel.description ?? ''}
-            placeholder="What this panel measures, and when it matters"
+            placeholder={tn('panelEd.descriptionPh')}
             onChange={e => update('description', e.target.value.trim() ? e.target.value : undefined)}
             style={{ width: '100%' }} />
         </Field>
@@ -144,17 +148,17 @@ export function PanelEditor({ panel, onChange, onDone, onCancel, onDelete, previ
             paylaşılan ızgara sınıfları birebir karşılıyor ve dar ekran
             daraltmasını da beraberinde getiriyor. */}
         <div className={showHeight ? 'grid-3' : 'grid-2'} style={{ display: 'grid', gap: 12 }}>
-          <Field label="Type">
+          <Field label={tn('panelEd.type')}>
             <select value={panel.type}
               onChange={e => {
                 const t = e.target.value as PanelType;
                 onChange({ ...panel, type: t, config: defaultConfig(t) });
               }}>
               {(Object.keys(TYPE_LABELS) as PanelType[]).map(t =>
-                <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
+                <option key={t} value={t}>{tn(TYPE_LABELS[t])}</option>)}
             </select>
           </Field>
-          <Field label="Width">
+          <Field label={tn('panelEd.width')}>
             <select value={panelSpan(panel)}
               onChange={e => {
                 const span = Number(e.target.value);
@@ -162,11 +166,11 @@ export function PanelEditor({ panel, onChange, onDone, onCancel, onDelete, previ
               }}>
               {/* Seçenek dışı (ör. içe aktarılan 5/12) mevcut değer de listede. */}
               {[...new Set([...SPAN_CHOICES, panelSpan(panel)])].sort((a, b) => a - b).map(n =>
-                <option key={n} value={n}>{SPAN_LABELS[n] ?? `${n}/12`}</option>)}
+                <option key={n} value={n}>{SPAN_LABELS[n] ? tn(SPAN_LABELS[n]) : `${n}/12`}</option>)}
             </select>
           </Field>
           {showHeight && (
-            <Field label="Height">
+            <Field label={tn('panelEd.height')}>
               {/* 'm' stores UNDEFINED, not the literal — the StepSelect
                   contract (v0.8.248): the default must never write a field
                   into the saved document, so a dashboard the operator only
@@ -177,7 +181,7 @@ export function PanelEditor({ panel, onChange, onDone, onCancel, onDelete, previ
                   update('height', h === 'm' ? undefined : h);
                 }}>
                 {(Object.keys(HEIGHT_LABELS) as PanelHeight[]).map(h =>
-                  <option key={h} value={h}>{HEIGHT_LABELS[h]}</option>)}
+                  <option key={h} value={h}>{tn(HEIGHT_LABELS[h])}</option>)}
               </select>
             </Field>
           )}
@@ -190,7 +194,7 @@ export function PanelEditor({ panel, onChange, onDone, onCancel, onDelete, previ
             incident chart". Custom-range overrides are out of
             scope here; the seven canonical presets cover every
             real use case we've seen. */}
-        <Field label="Time range override">
+        <Field label={tn('panelEd.rangeOverride')}>
           <select
             value={panel.rangeOverride?.preset ?? ''}
             onChange={e => {
@@ -198,14 +202,14 @@ export function PanelEditor({ panel, onChange, onDone, onCancel, onDelete, previ
               if (v === '') update('rangeOverride', undefined);
               else update('rangeOverride', { preset: v });
             }}>
-            <option value="">Default (inherit dashboard range)</option>
-            <option value="5m">Last 5 min</option>
-            <option value="15m">Last 15 min</option>
-            <option value="1h">Last 1 hour</option>
-            <option value="6h">Last 6 hours</option>
-            <option value="24h">Last 24 hours</option>
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
+            <option value="">{tn('panelEd.range.default')}</option>
+            <option value="5m">{tn('panelEd.range.5m')}</option>
+            <option value="15m">{tn('panelEd.range.15m')}</option>
+            <option value="1h">{tn('range.1h')}</option>
+            <option value="6h">{tn('range.6h')}</option>
+            <option value="24h">{tn('range.24h')}</option>
+            <option value="7d">{tn('range.7d')}</option>
+            <option value="30d">{tn('range.30d')}</option>
           </select>
         </Field>
 
@@ -238,7 +242,7 @@ export function PanelEditor({ panel, onChange, onDone, onCancel, onDelete, previ
           <TopNFields cfg={panel.config as TopNPanelConfig} onChange={updateConfig} />
         )}
         {panel.type === 'markdown' && (
-          <Field label="Markdown text">
+          <Field label={tn('panelEd.markdownText')}>
             <textarea
               value={(panel.config as MarkdownPanelConfig).text ?? ''}
               onChange={e => updateConfig({ text: e.target.value })}
@@ -260,6 +264,7 @@ function MetricFields({ cfg, onChange }: {
   // the picker usable.
   const update = <K extends keyof MetricPanelConfig>(k: K, v: MetricPanelConfig[K]) =>
     onChange({ ...cfg, [k]: v });
+  const tn = useT();
   // v0.10.2016 — sorgu PanelQueryEditor'de; burada yalnız görsel seçenekler.
   return (
     <>
@@ -268,24 +273,24 @@ function MetricFields({ cfg, onChange }: {
           da aynı: viz'i yalnız builder'a koymak, PromQL'e geçen operatörün
           config'inde okunan ama düzenlenemeyen bir alan bırakırdı. */}
       <div className="grid-3" style={{ display: 'grid', gap: 12 }}>
-        <Field label="Step">
+        <Field label={tn('panelEd.step')}>
           <StepSelect value={cfg.step} onChange={v => update('step', v)} />
         </Field>
-        <Field label="Visualization">
+        <Field label={tn('panelEd.visualization')}>
           <select value={cfg.viz ?? 'line'}
             onChange={e => update('viz', e.target.value as MetricPanelConfig['viz'])}>
-            <option value="line">Line</option>
-            <option value="bar">Bar</option>
-            <option value="stacked-bar">Stacked bar</option>
-            <option value="area">Area</option>
-            <option value="stacked-area">Stacked area</option>
+            <option value="line">{tn('panelEd.viz.line')}</option>
+            <option value="bar">{tn('panelEd.viz.bar')}</option>
+            <option value="stacked-bar">{tn('panelEd.viz.stackedBar')}</option>
+            <option value="area">{tn('panelEd.viz.area')}</option>
+            <option value="stacked-area">{tn('panelEd.viz.stackedArea')}</option>
           </select>
         </Field>
       </div>
       {/* v0.10.314 (chart-layer Dilim 2.2) — yatay eşik çizgileri; stat/gauge
           ile AYNI editör ve config şekli. Çizim tek kapıdan (thresholdLines):
           amber = warn, red = err çizgi; green taban, çizgisiz. */}
-      <Field label="Threshold lines (amber = warn, red = err; green = base, no line)">
+      <Field label={tn('panelEd.thresholdLines')}>
         <ThresholdEditor
           thresholds={cfg.thresholds ?? []}
           onChange={t => update('thresholds', t)} />
@@ -302,25 +307,26 @@ function HeatmapFields({ cfg, onChange }: {
 }) {
   const update = <K extends keyof HeatmapPanelConfig>(k: K, v: HeatmapPanelConfig[K]) =>
     onChange({ ...cfg, [k]: v });
+  const tn = useT();
   return (
     <>
-      <Field label="Histogram metric name">
+      <Field label={tn('panelEd.histMetric')}>
         <MetricNamePicker service="" value={cfg.metricName ?? ''}
           onChange={v => update('metricName', v)}
-          placeholder="search histogram metrics…" width="100%" />
+          placeholder={tn('panelEd.histPh')} width="100%" />
       </Field>
       <div className="grid-3" style={{ display: 'grid', gap: 12 }}>
-        <Field label="Service (optional)">
+        <Field label={tn('panelEd.serviceOpt')}>
           <input value={cfg.service ?? ''}
             onChange={e => update('service', e.target.value)} />
         </Field>
-        <Field label="Bounds unit (y-axis)">
+        <Field label={tn('panelEd.boundsUnit')}>
           <select value={cfg.unit ?? 'ms'} onChange={e => update('unit', e.target.value)}>
-            <option value="ms">ms (bounds already ms)</option>
-            <option value="s">s (bounds in seconds → ms)</option>
+            <option value="ms">{tn('panelEd.bounds.ms')}</option>
+            <option value="s">{tn('panelEd.bounds.s')}</option>
           </select>
         </Field>
-        <Field label="Step">
+        <Field label={tn('panelEd.step')}>
           <StepSelect value={cfg.step} onChange={v => update('step', v)} />
         </Field>
       </div>
@@ -334,48 +340,49 @@ function PromqlFields({ cfg, onChange }: {
 }) {
   const update = <K extends keyof PromqlPanelConfig>(k: K, v: PromqlPanelConfig[K]) =>
     onChange({ ...cfg, [k]: v });
+  const tn = useT();
   return (
     <>
       <div className="grid-4" style={{ display: 'grid', gap: 12 }}>
-        <Field label="Viz">
+        <Field label={tn('panelEd.viz')}>
           <select value={cfg.viz ?? 'line'}
             onChange={e => update('viz', e.target.value as PromqlPanelConfig['viz'])}>
-            <option value="line">Line</option>
-            <option value="area">Area</option>
-            <option value="bar">Bar</option>
-            <option value="stacked-bar">Stacked bar</option>
-            <option value="stacked-area">Stacked area</option>
+            <option value="line">{tn('panelEd.viz.line')}</option>
+            <option value="area">{tn('panelEd.viz.area')}</option>
+            <option value="bar">{tn('panelEd.viz.bar')}</option>
+            <option value="stacked-bar">{tn('panelEd.viz.stackedBar')}</option>
+            <option value="stacked-area">{tn('panelEd.viz.stackedArea')}</option>
             {/* v0.10.2017 — yeni panel tipi değil, promql panelinin görünümü. */}
-            <option value="table">Tablo</option>
-            <option value="toplist">Sıralı liste</option>
+            <option value="table">{tn('panelEd.viz.table')}</option>
+            <option value="toplist">{tn('panelEd.viz.toplist')}</option>
           </select>
         </Field>
         {(cfg.viz === 'table' || cfg.viz === 'toplist') && (
-          <Field label="Sırala">
-            <SegmentedControl aria-label="Sıralama ölçütü" size="sm" value={cfg.rank ?? 'last'}
+          <Field label={tn('panelEd.rank')}>
+            <SegmentedControl aria-label={tn('panelEd.rankAria')} size="sm" value={cfg.rank ?? 'last'}
               onChange={v => update('rank', v)}
-              options={[{ value: 'last', label: 'Son' }, { value: 'avg', label: 'Ort' }, { value: 'max', label: 'Maks' }]} />
+              options={[{ value: 'last', label: tn('panelEd.rank.last') }, { value: 'avg', label: tn('panelEd.rank.avg') }, { value: 'max', label: tn('panelEd.rank.max') }]} />
           </Field>
         )}
         {cfg.viz === 'toplist' && (
-          <Field label="Satır">
-            <SegmentedControl aria-label="Satır sayısı" size="sm" value={String(cfg.limit ?? TOPLIST_DEFAULT)}
+          <Field label={tn('panelEd.rows')}>
+            <SegmentedControl aria-label={tn('panelEd.rowsAria')} size="sm" value={String(cfg.limit ?? TOPLIST_DEFAULT)}
               onChange={v => update('limit', Number(v))}
               options={TOPLIST_LIMITS.map(n => ({ value: String(n), label: String(n) }))} />
           </Field>
         )}
-        <Field label="Unit (optional)">
+        <Field label={tn('panelEd.unitOpt')}>
           <UnitSelect value={cfg.unit} onChange={v => update('unit', v)} />
         </Field>
-        <Field label="Step">
+        <Field label={tn('panelEd.step')}>
           <StepSelect value={cfg.step} onChange={v => update('step', v)} />
         </Field>
         {/* v0.10.1443 — kaynak pini (sohbetten gelen VM-only MetricsQL CH'de kırılır). */}
-        <Field label="Kaynak">
+        <Field label={tn('panelEd.source')}>
           <select value={cfg.source ?? ''}
             onChange={e => update('source', (e.target.value || undefined) as PromqlPanelConfig['source'])}>
-            <option value="">Varsayılan</option>
-            <option value="vm">VictoriaMetrics</option>
+            <option value="">{tn('panelEd.sourceDefault')}</option>
+            <option value="vm">VictoriaMetrics</option>{/* i18n-exempt: ürün adları */}
             <option value="ch">ClickHouse</option>
           </select>
         </Field>
@@ -383,7 +390,7 @@ function PromqlFields({ cfg, onChange }: {
       {/* v0.10.314 (chart-layer Dilim 2.2) — yatay eşik çizgileri; stat/gauge
           ile AYNI editör ve config şekli. Çizim tek kapıdan (thresholdLines):
           amber = warn, red = err çizgi; green taban, çizgisiz. */}
-      <Field label="Threshold lines (amber = warn, red = err; green = base, no line)">
+      <Field label={tn('panelEd.thresholdLines')}>
         <ThresholdEditor
           thresholds={cfg.thresholds ?? []}
           onChange={t => update('thresholds', t)} />
@@ -397,47 +404,48 @@ function SpanMetricFields({ cfg, onChange }: {
 }) {
   const update = <K extends keyof SpanMetricPanelConfig>(k: K, v: SpanMetricPanelConfig[K]) =>
     onChange({ ...cfg, [k]: v });
+  const tn = useT();
   return (
     <>
       <div className="grid-3" style={{ display: 'grid', gap: 12 }}>
-        <Field label="Aggregation">
+        <Field label={tn('panelEd.aggregation')}>
           <select value={cfg.agg ?? 'count'} onChange={e => update('agg', e.target.value)}>
             {SPAN_AGGS.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </Field>
-        <Field label="Field (for percentiles)">
-          <input value={cfg.field ?? 'duration_ms'} placeholder="duration_ms"
+        <Field label={tn('panelEd.fieldPct')}>
+          <input value={cfg.field ?? 'duration_ms'} placeholder="duration_ms" /* i18n-exempt: alan adı */
             onChange={e => update('field', e.target.value)} />
         </Field>
-        <Field label="Visualization">
+        <Field label={tn('panelEd.visualization')}>
           <select value={cfg.viz ?? 'line'}
             onChange={e => update('viz', e.target.value as SpanMetricPanelConfig['viz'])}>
-            <option value="line">Line</option>
-            <option value="bar">Bar</option>
-            <option value="stacked-bar">Stacked bar</option>
-            <option value="area">Area</option>
-            <option value="stacked-area">Stacked area</option>
+            <option value="line">{tn('panelEd.viz.line')}</option>
+            <option value="bar">{tn('panelEd.viz.bar')}</option>
+            <option value="stacked-bar">{tn('panelEd.viz.stackedBar')}</option>
+            <option value="area">{tn('panelEd.viz.area')}</option>
+            <option value="stacked-area">{tn('panelEd.viz.stackedArea')}</option>
           </select>
         </Field>
       </div>
       {/* v0.10.314 (chart-layer Dilim 2.2) — yatay eşik çizgileri; stat/gauge
           ile AYNI editör ve config şekli. Çizim tek kapıdan (thresholdLines):
           amber = warn, red = err çizgi; green taban, çizgisiz. */}
-      <Field label="Threshold lines (amber = warn, red = err; green = base, no line)">
+      <Field label={tn('panelEd.thresholdLines')}>
         <ThresholdEditor
           thresholds={cfg.thresholds ?? []}
           onChange={t => update('thresholds', t)} />
       </Field>
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-        <Field label="Group by (comma-sep keys)">
-          <input value={cfg.groupBy ?? ''} placeholder="service_name, http_route"
+        <Field label={tn('panelEd.groupBy')}>
+          <input value={cfg.groupBy ?? ''} placeholder="service_name, http_route" /* i18n-exempt: alan adları */
             onChange={e => update('groupBy', e.target.value)} style={{ width: '100%' }} />
         </Field>
-        <Field label="Step">
+        <Field label={tn('panelEd.step')}>
           <StepSelect value={cfg.step} onChange={v => update('step', v)} />
         </Field>
       </div>
-      <Field label="DSL filter (optional)">
+      <Field label={tn('panelEd.dslFilter')}>
         <textarea value={cfg.dsl ?? ''}
           placeholder='service_name = "checkout"\nduration > 100ms'
           onChange={e => update('dsl', e.target.value)}
@@ -454,27 +462,29 @@ function SpanMetricFields({ cfg, onChange }: {
 function TopNFields({ cfg, onChange }: {
   cfg: TopNPanelConfig; onChange: (c: TopNPanelConfig) => void;
 }) {
+  const lang = useLang();
   const update = <K extends keyof TopNPanelConfig>(k: K, v: TopNPanelConfig[K]) =>
     onChange({ ...cfg, [k]: v });
+  const tn = useT();
   return (
     <>
       <div className="grid-3" style={{ display: 'grid', gap: 12 }}>
-        <Field label="Aggregation">
+        <Field label={tn('panelEd.aggregation')}>
           <select value={cfg.agg ?? 'p99'} onChange={e => update('agg', e.target.value)}>
             {SPAN_AGGS.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </Field>
-        <Field label="Field (for percentiles)">
-          <input value={cfg.field ?? 'duration_ms'} placeholder="duration_ms"
+        <Field label={tn('panelEd.fieldPct')}>
+          <input value={cfg.field ?? 'duration_ms'} placeholder="duration_ms" /* i18n-exempt: alan adı */
             onChange={e => update('field', e.target.value)} />
         </Field>
         {/* Capped at the server's own trim — offering 100 would render a
             "top 100" that is really a top 50 with a missing tail. */}
-        <Field label="Rows">
+        <Field label={tn('panelEd.rows')}>
           <select value={cfg.limit ?? 10}
             onChange={e => update('limit', Number(e.target.value))}>
             {[5, 10, 20, TOPN_SERVER_CAP].map(n =>
-              <option key={n} value={n}>{`Top ${n}`}</option>)}
+              <option key={n} value={n}>{tf('panelEd.topN', lang, { n })}</option>)}
           </select>
         </Field>
       </div>
@@ -483,23 +493,23 @@ function TopNFields({ cfg, onChange }: {
             http_route column, while the underscore form falls through to the
             attribute-array lookup and returns ONE empty group (verified
             against live ClickHouse, v0.9.781). */}
-        <Field label="Group by (comma-sep keys — these ARE the bars)">
-          <input value={cfg.groupBy ?? ''} placeholder="service.name, http.route"
+        <Field label={tn('panelEd.groupByBars')}>
+          <input value={cfg.groupBy ?? ''} placeholder="service.name, http.route" /* i18n-exempt: alan adları */
             onChange={e => update('groupBy', e.target.value)} style={{ width: '100%' }} />
         </Field>
-        <Field label="Unit">
+        <Field label={tn('panelEd.unit')}>
           <UnitSelect value={cfg.unit} onChange={v => update('unit', v)} />
         </Field>
       </div>
-      <Field label="Row click">
+      <Field label={tn('panelEd.rowClick')}>
         <select value={cfg.linkTo ?? 'none'}
           onChange={e => update('linkTo', e.target.value as TopNPanelConfig['linkTo'])}>
-          <option value="none">Not clickable</option>
-          <option value="service">Service detail (first group-by key must be a service)</option>
-          <option value="traces">Traces, filtered to this row</option>
+          <option value="none">{tn('panelEd.link.none')}</option>
+          <option value="service">{tn('panelEd.link.service')}</option>
+          <option value="traces">{tn('panelEd.link.traces')}</option>
         </select>
       </Field>
-      <Field label="DSL filter (optional)">
+      <Field label={tn('panelEd.dslFilter')}>
         <textarea value={cfg.dsl ?? ''}
           placeholder='service.name = "checkout"\nduration > 100ms'
           onChange={e => update('dsl', e.target.value)}
@@ -512,13 +522,14 @@ function TopNFields({ cfg, onChange }: {
 function StatFields({ cfg, onChange }: {
   cfg: StatPanelConfig; onChange: (c: StatPanelConfig) => void;
 }) {
+  const tn = useT();
   return (
     <>
-      <Field label="Source">
+      <Field label={tn('panelEd.source')}>
         <select value={cfg.source ?? 'spanmetric'}
           onChange={e => onChange({ ...cfg, source: e.target.value as 'metric' | 'spanmetric' })}>
-          <option value="spanmetric">Span aggregation</option>
-          <option value="metric">Metric query</option>
+          <option value="spanmetric">{tn('panelEd.src.span')}</option>
+          <option value="metric">{tn('panelEd.src.metric')}</option>
         </select>
       </Field>
       {cfg.source === 'spanmetric' && (
@@ -530,25 +541,25 @@ function StatFields({ cfg, onChange }: {
           onChange={c => onChange({ ...cfg, metric: c })} />
       )}
       <div className="grid-2" style={{ display: 'grid', gap: 12 }}>
-        <Field label="Unit suffix">
+        <Field label={tn('panelEd.unitSuffix')}>
           <UnitSelect value={cfg.unit} onChange={v => onChange({ ...cfg, unit: v })} />
         </Field>
-        <Field label="Decimals">
+        <Field label={tn('panelEd.decimals')}>
           <input type="number" min={0} max={6} value={cfg.decimals ?? 2}
             onChange={e => onChange({ ...cfg, decimals: parseInt(e.target.value || '0') })} />
         </Field>
       </div>
       {/* v0.5.486 — threshold colouring controls. */}
-      <Field label="Threshold colour mode">
+      <Field label={tn('panelEd.colorMode')}>
         <select value={cfg.colorMode ?? 'none'}
           onChange={e => onChange({ ...cfg, colorMode: e.target.value as 'none' | 'value' | 'background' })}>
-          <option value="none">None (delta direction only)</option>
-          <option value="value">Tint the number</option>
-          <option value="background">Tint the panel background</option>
+          <option value="none">{tn('panelEd.color.none')}</option>
+          <option value="value">{tn('panelEd.color.value')}</option>
+          <option value="background">{tn('panelEd.color.background')}</option>
         </select>
       </Field>
       {(cfg.colorMode === 'value' || cfg.colorMode === 'background') && (
-        <Field label="Threshold bands">
+        <Field label={tn('panelEd.thresholdBands')}>
           <ThresholdEditor
             thresholds={cfg.thresholds ?? []}
             onChange={t => onChange({ ...cfg, thresholds: t })} />
@@ -566,13 +577,14 @@ function StatFields({ cfg, onChange }: {
 function GaugeFields({ cfg, onChange }: {
   cfg: GaugePanelConfig; onChange: (c: GaugePanelConfig) => void;
 }) {
+  const tn = useT();
   return (
     <>
-      <Field label="Source">
+      <Field label={tn('panelEd.source')}>
         <select value={cfg.source ?? 'spanmetric'}
           onChange={e => onChange({ ...cfg, source: e.target.value as 'metric' | 'spanmetric' })}>
-          <option value="spanmetric">Span aggregation</option>
-          <option value="metric">Metric query</option>
+          <option value="spanmetric">{tn('panelEd.src.span')}</option>
+          <option value="metric">{tn('panelEd.src.metric')}</option>
         </select>
       </Field>
       {cfg.source === 'spanmetric' && (
@@ -584,23 +596,23 @@ function GaugeFields({ cfg, onChange }: {
           onChange={c => onChange({ ...cfg, metric: c })} />
       )}
       <div className="grid-4" style={{ display: 'grid', gap: 12 }}>
-        <Field label="Min">
+        <Field label={tn('panelEd.min')}>
           <input type="number" value={cfg.min ?? 0}
             onChange={e => onChange({ ...cfg, min: parseFloat(e.target.value || '0') })} />
         </Field>
-        <Field label="Max">
+        <Field label={tn('panelEd.max')}>
           <input type="number" value={cfg.max ?? 100}
             onChange={e => onChange({ ...cfg, max: parseFloat(e.target.value || '0') })} />
         </Field>
-        <Field label="Unit suffix">
+        <Field label={tn('panelEd.unitSuffix')}>
           <UnitSelect value={cfg.unit} onChange={v => onChange({ ...cfg, unit: v })} />
         </Field>
-        <Field label="Decimals">
+        <Field label={tn('panelEd.decimals')}>
           <input type="number" min={0} max={6} value={cfg.decimals ?? 1}
             onChange={e => onChange({ ...cfg, decimals: parseInt(e.target.value || '0') })} />
         </Field>
       </div>
-      <Field label="Threshold zones">
+      <Field label={tn('panelEd.thresholdZones')}>
         <ThresholdEditor
           thresholds={cfg.thresholds ?? []}
           onChange={t => onChange({ ...cfg, thresholds: t })} />
@@ -617,6 +629,8 @@ function ThresholdEditor({ thresholds, onChange }: {
   thresholds: { value: number; color: 'green' | 'amber' | 'red' }[];
   onChange: (t: { value: number; color: 'green' | 'amber' | 'red' }[]) => void;
 }) {
+  const tn = useT();
+  const lang = useLang();
   const sorted = [...thresholds].sort((a, b) => a.value - b.value);
   const setRow = (i: number, value: number) => {
     const next = sorted.slice();
@@ -637,8 +651,7 @@ function ThresholdEditor({ thresholds, onChange }: {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {sorted.length === 0 && (
         <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-          No thresholds set — add at least one to colour the panel.
-          Convention: green &lt; amber &lt; red.
+          {tn('panelEd.noThresholds')}
         </div>
       )}
       {sorted.map((t, i) => (
@@ -647,7 +660,7 @@ function ThresholdEditor({ thresholds, onChange }: {
             width: 14, height: 14, borderRadius: 3,
             background: THRESHOLD_COLOURS[t.color], flexShrink: 0,
           }} />
-          <span style={{ color: 'var(--text2)', minWidth: 50 }}>{t.color}</span>
+          <span style={{ color: 'var(--text2)', minWidth: 50 }}>{tn(`panelEd.band.${t.color}`)}</span>
           <span style={{ color: 'var(--text3)' }}>≥</span>
           <input type="number" value={t.value}
             onChange={e => setRow(i, parseFloat(e.target.value || '0'))}
@@ -657,9 +670,9 @@ function ThresholdEditor({ thresholds, onChange }: {
         </div>
       ))}
       <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-        <Button variant="secondary" size="sm" onClick={() => addRow('green')}>+ green</Button>
-        <Button variant="secondary" size="sm" onClick={() => addRow('amber')}>+ amber</Button>
-        <Button variant="secondary" size="sm" onClick={() => addRow('red')}>+ red</Button>
+        <Button variant="secondary" size="sm" onClick={() => addRow('green')}>{tf('panelEd.addBand', lang, { color: tn('panelEd.band.green') })}</Button>
+        <Button variant="secondary" size="sm" onClick={() => addRow('amber')}>{tf('panelEd.addBand', lang, { color: tn('panelEd.band.amber') })}</Button>
+        <Button variant="secondary" size="sm" onClick={() => addRow('red')}>{tf('panelEd.addBand', lang, { color: tn('panelEd.band.red') })}</Button>
       </div>
     </div>
   );

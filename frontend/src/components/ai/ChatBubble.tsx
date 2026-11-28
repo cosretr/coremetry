@@ -64,7 +64,7 @@ import { MetricPanelCard } from './MetricPanelCard'; // v0.10.1435 — panel aç
 import { CodeStatusNote } from '../CodeStatusNote'; // v0.10.1406 — kod turunun durum satırı (✨ düğmesiyle aynı)
 import { CodeSourceFooter } from './CodeSourceFooter'; // v0.10.1406 — kod turunun kaynak satırı
 import { emitAiEvidence, scrollToAttr } from './aiEvents';
-import { agoTR } from '@/lib/utils'; // v0.10.1444 — arşiv notu
+import { t, tf, useLang, useT, currentLang, agoLang } from '@/lib/i18n'; // dilim 2 — balon metni arayüz dilinde (chatB.*); arşiv notu agoLang
 
 // ChatBubble — bir sohbet turunun ÇİZİMİ. v0.9.479'da CopilotChat.tsx'ten
 // buraya taşındı: AI çekmecesi içindeki sohbet (AIDrawer) aynı balonu
@@ -281,6 +281,7 @@ function MdPara({ text, caret }: { text: string; caret: boolean }) {
 function CodeBlock({ lang, code, open, streaming, title }: {
   lang: string; code: string; open: boolean; streaming: boolean; title?: string;
 }) {
+  const ui = useLang();
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [wrap, setWrap] = useState(false);
@@ -313,20 +314,20 @@ function CodeBlock({ lang, code, open, streaming, title }: {
     <div className={`cm-md-code${title ? ' is-file' : ''}`}>
       <div className="cm-md-code-h">
         {title && <span className="cm-md-code-file" title={title}>{title}</span>}
-        <span className="cm-md-code-lang">{lang || (title ? '' : 'kod')}</span>
-        {open && <span className="cm-md-code-st">{streaming ? 'yazılıyor…' : 'kesildi'}</span>}
+        <span className="cm-md-code-lang">{lang || (title ? '' : t('chatB.code.lang', ui))}</span>
+        {open && <span className="cm-md-code-st">{streaming ? t('chatB.code.writing', ui) : t('chatB.code.cut', ui)}</span>}
         {!open && (
           <span className="cm-md-code-acts">
             <Button variant="ghost" size="xs" onClick={() => setWrap(w => !w)} aria-pressed={wrap}
-              title={wrap ? 'Uzun satırları kaydır' : 'Uzun satırları sar'}>{wrap ? '↔' : '↩'}</Button>
+              title={wrap ? t('chatB.code.unwrap', ui) : t('chatB.code.wrap', ui)}>{wrap ? '↔' : '↩'}</Button>
             {(title || total >= 10) && (
               <Button variant="ghost" size="xs" onClick={download}
-                title={`İndir: ${sanitizeFileName(title, lang)}`} aria-label="Kod bloğunu indir">⤓ İndir</Button>
+                title={tf('chatB.code.downloadTitle', ui, { name: sanitizeFileName(title, lang) })} aria-label={t('chatB.code.downloadAria', ui)}>{t('chatB.code.download', ui)}</Button>
             )}
             <Button variant="ghost" size="xs" onClick={copy}
-              title="Kodu kopyala" aria-label="Kod bloğunu kopyala"
+              title={t('chatB.code.copyTitle', ui)} aria-label={t('chatB.code.copyAria', ui)}
               className={copied ? 'is-ok' : undefined}>
-              {copied ? '✓' : '⧉ Kopyala'}
+              {copied ? '✓' : t('chatB.copy', ui)}
             </Button>
           </span>
         )}
@@ -344,7 +345,7 @@ function CodeBlock({ lang, code, open, streaming, title }: {
       {collapsible && (
         <div className="cm-md-code-more">
           <DisclosureButton anatomy="row" expanded={expanded} onClick={() => setExpanded(v => !v)}>
-            {expanded ? 'Daralt' : `Tümünü göster (${total} satır)`}
+            {expanded ? t('chatB.code.collapse', ui) : tf('chatB.code.showAll', ui, { n: total })}
           </DisclosureButton>
         </div>
       )}
@@ -441,7 +442,7 @@ function renderBlocks(blocks: readonly ChatBlock[], streaming: boolean, typedCha
                 {b.tasks?.[k] != null && (
                   // Salt-okunur görev kutusu (GFM): tıklanamaz, durum aria'da.
                   <input type="checkbox" className="cm-task" checked={!!b.tasks[k]} readOnly disabled
-                    aria-label={b.tasks[k] ? 'tamamlandı' : 'yapılacak'} />
+                    aria-label={t(b.tasks[k] ? 'chatB.task.done' : 'chatB.task.todo', currentLang())} />
                 )}
                 <MdListText text={it} live={streaming && last && k === b.items.length - 1} />
                 {b.nested?.[k] && renderBlocks(b.nested[k] as ChatBlock[], streaming, typedCharts, false, `${i}.${k}.`)}
@@ -457,7 +458,7 @@ function renderBlocks(blocks: readonly ChatBlock[], streaming: boolean, typedCha
         if (b.lang === 'chart' && typedCharts !== NO_CHARTS) {
           if (b.open) {
             if (streaming) {
-              out.push(<span key={i} className="cm-md-wait">grafik hazırlanıyor…</span>);
+              out.push(<span key={i} className="cm-md-wait">{t('chatB.chart.wait', currentLang())}</span>);
               break;
             }
           } else {
@@ -595,6 +596,7 @@ function ToolChips({ steps, details, hasText, turnDone, evId, setEvId }: {
   evId: number | null;
   setEvId: (i: number | null) => void;
 }) {
+  const tn = useT();
   const openIdx = evId == null ? null : (details ?? []).findIndex(d => d.i === evId);
   const setOpenIdx = (i: number | null) => setEvId(i == null ? null : (details?.[i]?.i ?? null));
   // Çip sırası ile detay sırası aynı: ikisi de `step` olayında birlikte
@@ -620,7 +622,7 @@ function ToolChips({ steps, details, hasText, turnDone, evId, setEvId }: {
           if (!ready) {
             return (
               <span key={i} style={chipStyle}>
-                ⚙ {s}{stepRunning(d, turnDone) && <span> · çalışıyor…</span>}
+                ⚙ {s}{stepRunning(d, turnDone) && <span> · {tn('chatB.running')}</span>}
               </span>
             );
           }
@@ -633,9 +635,9 @@ function ToolChips({ steps, details, hasText, turnDone, evId, setEvId }: {
               <Chip size="xs" pill tone={isOpen ? 'accent' : 'neutral'}
                 onClick={() => setOpenIdx(isOpen ? null : i)}
                 aria-expanded={isOpen}
-                title={d?.skipped ? 'Sunucu bu çağrıyı yürütmedi — nedenini göster' : d?.ok === false ? 'Tool hata döndürdü — veriyi göster' : 'Bu adımın verisini göster'}
+                title={d?.skipped ? tn('chatB.chip.skippedTitle') : d?.ok === false ? tn('chatB.chip.errTitle') : tn('chatB.chip.showTitle')}
                 style={{ fontFamily: chipStyle.fontFamily }}>
-                ⚙ {s} {d?.skipped ? '· yürütülmedi ' : d?.ok === false ? '⚠' : ''}{isOpen ? '▾' : '▸'}
+                ⚙ {s} {d?.skipped ? `· ${tn('chatB.notExecuted')} ` : d?.ok === false ? '⚠' : ''}{isOpen ? '▾' : '▸'}
               </Chip>
               <StateBadges states={states} />
             </Fragment>
@@ -652,6 +654,7 @@ function ToolChips({ steps, details, hasText, turnDone, evId, setEvId }: {
 function ToolEvidence({ d }: { d: ChatStepDetail }) {
   const view = parseStepPreview(d.preview ?? '', d.truncated);
   const evBlocks = useContext(EvidenceBlocksContext);
+  const lang = useLang();
   return (
     <div style={{
       marginTop: 6, padding: '6px 8px', borderRadius: 6,
@@ -665,9 +668,9 @@ function ToolEvidence({ d }: { d: ChatStepDetail }) {
       )}
       {/* v0.10.1274 — sunucunun ekrandan koyduğu kapsam (kanıt çipi yoksa burada; varsa çipin içinde). */}
       {!d.evidence && ctxAppliedLabel(d.ctxApplied) && (
-        <div className="cell-hint" title={d.ctxApplied?.envNotApplied ? `env uygulanmadı: ${d.ctxApplied.envNotApplied}` : undefined}
+        <div className="cell-hint" title={d.ctxApplied?.envNotApplied ? tf('chatB.ev.envNotApplied', lang, { env: d.ctxApplied.envNotApplied }) : undefined}
           style={{ marginBottom: 4 }}>
-          kapsam · {ctxAppliedLabel(d.ctxApplied)}
+          {t('chatB.ev.scope', lang)} · {ctxAppliedLabel(d.ctxApplied)}
         </div>
       )}
       {/* v0.10.1272 — kanıt zarflı aracın çipi (kaynak · pencere · satır · süre; tıkla = Explore'da aç). */}
@@ -679,12 +682,12 @@ function ToolEvidence({ d }: { d: ChatStepDetail }) {
       {d.href && d.href !== d.evidence?.href && (
         <a className="sec" href={d.href} target="_blank" rel="noopener noreferrer"
           style={{ fontSize: 10.5, padding: '2px 8px', marginBottom: 4, display: 'inline-block' }}>
-          ↗ Üründe aç
+          {t('chatB.ev.openInProduct', lang)}
         </a>
       )}
       {d.truncated && (
         <div className="badge b-warn" style={{ marginBottom: 4 }}>
-          kırpıldı · {fmtPreviewBytes(d.bytes ?? 0)} içinden ilk {fmtPreviewBytes(4096)}
+          {tf('chatB.ev.truncated', lang, { total: fmtPreviewBytes(d.bytes ?? 0), shown: fmtPreviewBytes(4096) })}
         </div>
       )}
       {view.kind === 'table' ? (
@@ -711,7 +714,7 @@ function ToolEvidence({ d }: { d: ChatStepDetail }) {
         // ChatBubble.render.test.tsx bunu yakaladı (imleç SPAN'a yapışık).
         whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere',
           fontSize: 10, color: 'var(--text2)',
-        }}>{view.text || '(boş)'}</pre>
+        }}>{view.text || t('chatB.ev.empty', lang)}</pre>
       )}
     </div>
   );
@@ -738,6 +741,7 @@ export function ToolStepsPanel({ details: allDetails, error, turnDone, evId, set
   /** test dikişi — tablo gövdesini kapalı DisclosureButton'a tıklamadan çizdirir */
   initialOpen?: boolean;
 }) {
+  const lang = useLang();
   const [open, setOpen] = useState(initialOpen);
   const [all, setAll] = useState(false);
   // Yalnız ARAÇ satırları (inceleme blocker): `tool`suz etiket adımları
@@ -754,22 +758,22 @@ export function ToolStepsPanel({ details: allDetails, error, turnDone, evId, set
     <div className="cm-steps">
       <div className="cm-steps-sum">
         <DisclosureButton anatomy="row" expanded={open} onClick={() => setOpen(v => !v)}
-          title={sum.totalMs === null ? 'Toplam süre: en az bir adımın süresi ölçülmedi' : 'Araç sürelerinin toplamı (model süresi hariç)'}>
-          ⚙ {sum.count} araç
-          {sum.errors > 0 && <> · <span style={{ color: 'var(--err)' }}>{sum.errors} hata</span></>}
-          {sum.skipped > 0 && <> · {sum.skipped} yürütülmedi</>}
-          {sum.pending > 0 && <> · {sum.pending} sürüyor</>}
-          {sum.noEvidence > 0 && <> · {sum.noEvidence} kanıtsız</>}
+          title={sum.totalMs === null ? t('chatB.steps.totalUnknown', lang) : t('chatB.steps.totalTitle', lang)}>
+          ⚙ {tf('chatB.steps.tools', lang, { n: sum.count })}
+          {sum.errors > 0 && <> · <span style={{ color: 'var(--err)' }}>{tf('chatB.steps.errors', lang, { n: sum.errors })}</span></>}
+          {sum.skipped > 0 && <> · {tf('chatB.steps.skipped', lang, { n: sum.skipped })}</>}
+          {sum.pending > 0 && <> · {tf('chatB.steps.pending', lang, { n: sum.pending })}</>}
+          {sum.noEvidence > 0 && <> · {tf('chatB.steps.noEvidence', lang, { n: sum.noEvidence })}</>}
           {' · '}{sum.totalMs === null ? '—' : fmtMs(sum.totalMs)}
         </DisclosureButton>
-        {sum.guided && <span className="badge b-info" title="Rehberli kip: model araç çağırmadı, kanıt sunucuda önceden toplandı">ön-yükleme</span>}
-        {sum.intent && <span className="badge b-info" title="Serbest soru tek JSON çağrısıyla kılavuz niyetine sınıflandırıldı; kanıt sunucuda toplandı (v0.10.172)">niyet</span>}
-        {budget && <span className="badge b-warn" title={error}>⏱ bütçe aşıldı</span>}
+        {sum.guided && <span className="badge b-info" title={t('chatB.steps.guided.title', lang)}>{t('chatB.steps.guided', lang)}</span>}
+        {sum.intent && <span className="badge b-info" title={t('chatB.steps.intent.title', lang)}>{t('chatB.steps.intent', lang)}</span>}
+        {budget && <span className="badge b-warn" title={error}>{t('chatB.steps.budgetHit', lang)}</span>}
       </div>
       {open && (
         <div className="cm-steps-tw">
           <table className="cm-steps-t">
-            <thead><tr><th>#</th><th>Araç</th><th>Argümanlar</th><th className="num">Süre</th><th>Sonuç</th><th>Durum</th></tr></thead>
+            <thead><tr><th>#</th><th>{t('chatB.col.tool', lang)}</th><th>{t('chatB.col.args', lang)}</th><th className="num">{t('chatB.col.duration', lang)}</th><th>{t('chatB.col.result', lang)}</th><th>{t('chatB.col.status', lang)}</th></tr></thead>
             <tbody>
               {rows.map(d => {
                 const err = d.ok === false && !d.skipped ? parseToolError(d.preview) : null;
@@ -787,7 +791,7 @@ export function ToolStepsPanel({ details: allDetails, error, turnDone, evId, set
                             (taban sınıfları ui/ dışında elle yazılmaz — primitiveClasses gate'i). */}
                         <DisclosureButton anatomy="row" expanded={isOpen} disabled={!settled}
                           onClick={() => setEvId(isOpen ? null : d.i)}
-                          title={settled ? 'Kanıtı göster' : noEv ? 'Bu adım için kanıt yayınlanmadı' : 'Sonuç bekleniyor'}>
+                          title={settled ? t('chatB.steps.showEvidence', lang) : noEv ? t('chatB.steps.noEvPublished', lang) : t('chatB.steps.waiting', lang)}>
                           {d.tool}
                         </DisclosureButton>
                       </td>
@@ -799,19 +803,20 @@ export function ToolStepsPanel({ details: allDetails, error, turnDone, evId, set
                         )}
                       </td>
                       <td className="cm-steps-res" title={err?.detail ?? d.preview}>
-                        {settled ? first : noEv ? 'kanıt yok (boş sonuç)' : 'sürüyor…'}
+                        {settled ? first : noEv ? t('chatB.steps.noEvEmpty', lang) : t('chatB.ongoing', lang)}
                       </td>
                       {/* v0.10.973 — tablo standardı T5: satır içi `whiteSpace: nowrap` silindi; `tbody td` zaten tek satır (T11). */}
                       <td>
-                        {!settled ? <span className="badge b-gray">{noEv ? 'kanıt yok' : '…'}</span>
-                          : d.skipped ? <span className="badge b-gray" title="Sunucu bu çağrıyı yürütmedi (süre ölçüm değildir)">yürütülmedi</span>
-                          : d.ok === false ? <span className="badge b-err" title={`${err ? toolErrorLabel(err.cls) : 'hata'}${err?.retryable ? ' · tekrar denenebilir' : ''}`}>⚠ {err?.cls === 'unauthorized' ? 'yetki yok' : 'hata'}{err?.retryable ? ' · tekrar' : ''}</span>
+                        {!settled ? <span className="badge b-gray">{noEv ? t('chatB.steps.noEv', lang) : '…'}</span>
+                          : d.skipped ? <span className="badge b-gray" title={t('chatB.steps.skippedTitle', lang)}>{t('chatB.notExecuted', lang)}</span> /* i18n-exempt: ternary chain between badges, not text */
+                          : d.ok === false ? <span className="badge b-err" title={`${err ? toolErrorLabel(err.cls) : t('chatB.err', lang)}${err?.retryable ? ` · ${t('chatB.retryable', lang)}` : ''}`}>⚠ {err?.cls === 'unauthorized' ? t('chatB.unauthorized', lang) : t('chatB.err', lang)}{err?.retryable ? ` · ${t('chatB.retry', lang)}` : ''}</span>
                           : states.length > 0 ? null
                           // v0.10.944 — kırpık JSON'da durum görünmüyorsa nötr «ok» YALAN olurdu (Go map sırası: veri anahtarları `source`tan önce)
-                          : stateUnknown(d) ? <span className="badge b-warn" title="önizleme kırpık; kaynak durumu önizlemede yok">durum okunamadı</span>
+                          : stateUnknown(d) ? <span className="badge b-warn" title={t('chatB.steps.stateUnknown.title', lang)}>{t('chatB.steps.stateUnknown', lang)}</span>
+                          /* i18n-exempt: universal status token */
                           : <span className="badge b-gray">ok</span> /* v0.10.929 (K5) — sohbet geçmişinde kalıcı: nötr */}
                         {settled && <StateBadges states={states} />}
-                        {d.truncated && <span className="badge b-warn" style={{ marginLeft: 4 }} title={`önizleme 4 KB'a kırpıldı; gerçek boy ${fmtPreviewBytes(d.bytes ?? 0)}`}>kırpık</span>}
+                        {d.truncated && <span className="badge b-warn" style={{ marginLeft: 4 }} title={tf('chatB.trunc.title', lang, { size: fmtPreviewBytes(d.bytes ?? 0) })}>{t('chatB.trunc', lang)}</span>}
                       </td>
                     </tr>
                     {isOpen && ev && (
@@ -825,12 +830,12 @@ export function ToolStepsPanel({ details: allDetails, error, turnDone, evId, set
           {details.length > VISIBLE_ROWS && (
             <div className="cm-steps-more">
               <DisclosureButton anatomy="row" expanded={all} onClick={() => setAll(v => !v)}>
-                {all ? 'daha az' : `${details.length - VISIBLE_ROWS} daha`}
+                {all ? t('chatB.less', lang) : tf('chatB.more', lang, { n: details.length - VISIBLE_ROWS })}
               </DisclosureButton>
             </div>
           )}
           <div className="field-hint" style={{ marginTop: 4 }}>
-            Sıra: step/step-result olayları · süre: sunucu ölçümü (araç başına; model süresi dâhil değil) · önizleme 4 KB tel tavanı, «bytes» gerçek boy · sayfa yenilenince panel gider (arşiv yalnız metin saklar).
+            {t('chatB.steps.legend', lang)}
           </div>
         </div>
       )}
@@ -846,6 +851,7 @@ export function ToolStepsPanel({ details: allDetails, error, turnDone, evId, set
 function StepsDisclosure({ turn, evId, setEvId, initialOpen }: {
   turn: ChatTurn; evId: number | null; setEvId: (i: number | null) => void; initialOpen?: boolean;
 }) {
+  const lang = useLang();
   const [userOpen, setUserOpen] = useState<boolean | null>(initialOpen ?? null);
   const open = userOpen ?? !!turn.pending;
   const n = turn.steps?.length ?? 0;
@@ -853,22 +859,22 @@ function StepsDisclosure({ turn, evId, setEvId, initialOpen }: {
     <div className="cm-how">
       <div className="cm-how__head">
         <DisclosureButton anatomy="row" expanded={open} onClick={() => setUserOpen(!open)}
-          className="cm-how__btn" title="Bu cevap için çalıştırılan adımlar ve kanıtları">
-          Nasıl cevapladım · {n} adım{turn.pending ? ' · sürüyor…' : ''}
+          className="cm-how__btn" title={t('chatB.how.title', lang)}>
+          {tf('chatB.how', lang, { n })}{turn.pending ? ` · ${t('chatB.ongoing', lang)}` : ''}
         </DisclosureButton>
         {/* v0.10.1150 — "Derin düşün" açıkken istenen cevap: sessiz rozet. */}
         {turn.deep && (
-          <span className="cm-deep-badge" title="Bu cevap Derin düşün açıkken üretildi (daha çok kaynak, daha çok adım)">
-            <Brain size={11} strokeWidth={2} aria-hidden="true" /> Derin
+          <span className="cm-deep-badge" title={t('chatB.deep.title', lang)}>
+            <Brain size={11} strokeWidth={2} aria-hidden="true" /> {t('chatB.deep', lang)}
           </span>
         )}
         {/* v0.10.1656 (CoSRE v2 B3) — araştırma bütçesi; yalnız v2 akışı doldurur. */}
         {turn.budget && (
-          <span className="cell-hint" data-cosre-budget="" title="Araştırma bütçesi: yürütülen araç çağrısı / çağrı hakkı · kullanılan tur / tur hakkı">
-            {turn.budget.executed}/{turn.budget.maxCalls} çağrı · {turn.budget.roundsUsed}/{turn.budget.maxRounds} tur
+          <span className="cell-hint" data-cosre-budget="" title={t('chatB.budget.title', lang)}>
+            {tf('chatB.budget', lang, { calls: turn.budget.executed, maxCalls: turn.budget.maxCalls, rounds: turn.budget.roundsUsed, maxRounds: turn.budget.maxRounds })}
           </span>
         )}
-        {turn.budget?.exhausted && <span className="badge b-warn" data-cosre-budget-exhausted="">bütçe doldu</span>}
+        {turn.budget?.exhausted && <span className="badge b-warn" data-cosre-budget-exhausted="">{t('chatB.budget.exhausted', lang)}</span>}
       </div>
       {open && (
         <div className="cm-how__body">
@@ -890,10 +896,11 @@ function StepsDisclosure({ turn, evId, setEvId, initialOpen }: {
 // sunucunun çip başına bastığı `phase`ten (phaseTrail.ts); evre yoksa
 // (eski sunucu, arşivden geri yüklenen tur) hiç çizilmez.
 export function PhaseTrail({ details }: { details: readonly ChatStepDetail[] | undefined }) {
+  const lang = useLang();
   const phases = useMemo(() => phaseTrail(details), [details]);
   if (phases.length === 0) return null;
   return (
-    <div className="cm-phase-trail" aria-label={`Soruşturma akışı: ${phases.join(' → ')}`}>
+    <div className="cm-phase-trail" aria-label={tf('chatB.phases', lang, { phases: phases.join(' → ') })}>
       {phases.map((p, i) => (
         <Fragment key={`${i}-${p}`}>
           {i > 0 && <span className="cm-phase-trail__sep" aria-hidden="true">→</span>}
@@ -908,11 +915,12 @@ export function PhaseTrail({ details }: { details: readonly ChatStepDetail[] | u
 // numaralı "Kaynaklar" listesi (başlık + host); 3'ten fazlası katlanır.
 // Numara = metindeki [n] atfı = sunucunun bağlam numarası.
 function SourceList({ chips }: { chips: readonly SourceChip[] }) {
+  const lang = useLang();
   const [all, setAll] = useState(false);
   const shown = all || chips.length <= 3 ? chips : chips.slice(0, 3);
   return (
-    <div className="cm-sources" role="group" aria-label="Kaynaklar">
-      <div className="cm-sources__h">Kaynaklar</div>
+    <div className="cm-sources" role="group" aria-label={t('chatB.sources', lang)}>
+      <div className="cm-sources__h">{t('chatB.sources', lang)}</div>
       <ol className="cm-sources__list">
         {shown.map(c => (
           <li key={c.key} title={c.title}>
@@ -922,14 +930,14 @@ function SourceList({ chips }: { chips: readonly SourceChip[] }) {
             ) : (
               <span className="cm-sources__t">{c.name}</span>
             )}
-            {c.kind && <Badge tone="neutral" title="Kaynak türü">{SOURCE_KIND_LABEL[c.kind]}</Badge>}
+            {c.kind && <Badge tone="neutral" title={t('chatB.sources.kind', lang)}>{SOURCE_KIND_LABEL[c.kind]}</Badge>}
             {c.host && <span className="cm-sources__host">{c.host}</span>}
           </li>
         ))}
       </ol>
       {chips.length > 3 && (
         <DisclosureButton anatomy="row" expanded={all} onClick={() => setAll(v => !v)} className="cm-sources__more">
-          {all ? 'daha az' : `${chips.length - 3} kaynak daha`}
+          {all ? t('chatB.less', lang) : tf('chatB.sources.more', lang, { n: chips.length - 3 })}
         </DisclosureButton>
       )}
     </div>
@@ -1009,6 +1017,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
   const isUser = turn.role === 'user';
   const navigate = useNavigate();
   const loc = useLocation(); // v0.10.542 — aksiyon görünürlüğü/uygulaması açık sayfaya göre
+  const lang = useLang();
   const [copied, setCopied] = useState(false);
   // v0.10.161 — açık kanıt kimliği (d.i): çip şeridi ve şeffaflık paneli paylaşır.
   const [evId, setEvId] = useState<number | null>(null);
@@ -1122,6 +1131,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
       {!thinkingOnly && (
         <div className="cm-msg-ai__who">
           <span aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {/* i18n-exempt: product name */}
             <img src="/favicon.svg" width={14} height={14} alt="" draggable={false} /> CoSRE
           </span>
           <AiGeneratedMark />{/* wave 3 — AI içeriği etiketi (tek bileşen) */}
@@ -1139,7 +1149,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
             {/* v0.10.1444 — Geçmiş'ten açılan turun kartları turun ANLIK GÖRÜNTÜSÜ (cosre_interactions.blocks). */}
             {turn.archiveExchangeId && !!turn.blocks?.length && (
               <div className="cm-msg-note" data-archive-note="">
-                Arşiv anlık görüntüsü{turn.blocksAt ? ` · ${agoTR(turn.blocksAt * 1e6)}` : ''}{turn.blocksDropped?.length ? ` · ${turn.blocksDropped.length} kart sığmadı` : ''}
+                {t('chatB.archive', lang)}{turn.blocksAt ? ` · ${agoLang(turn.blocksAt * 1e6, lang)}` : ''}{turn.blocksDropped?.length ? ` · ${tf('chatB.archive.dropped', lang, { n: turn.blocksDropped.length })}` : ''}
               </div>
             )}
             {/* v0.10.1783 — endpoint turu: ölçülen RED değişimi cevabın ÜSTÜNDE (Go endpointDeltaTR; modelden bağımsız). */}
@@ -1149,7 +1159,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
             {/* v0.10.1400 — açıklama turu: önbellek etiketi + ✨ Explain gövdesi + kanıt trace'leri. */}
             {ex?.cached && !turn.pending && (
               <div className="cm-msg-note" data-explain-cached="">
-                ♻ önbellekten{ex.cachedAtMs ? ` · ${Math.max(1, Math.round((Date.now() - ex.cachedAtMs) / 60000))} dk önce üretildi` : ''} — ✨ Explain düğmesiyle aynı cevap
+                {t('chatB.cached', lang)}{ex.cachedAtMs ? ` · ${tf('chatB.cached.ago', lang, { n: Math.max(1, Math.round((Date.now() - ex.cachedAtMs) / 60000)) })}` : ''} — {t('chatB.cached.same', lang)}
               </div>
             )}
             {/* v0.10.1405 (Tek CoSRE adım 2) — künye etiketi (runbook: "RUNBOOK", eski ✨ kart
@@ -1189,9 +1199,9 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
             {ex?.code && !turn.pending && !(ex.kind === 'trace' && (traceEvidenceBlock(turn.blocks) || ex.renderer === 'trace-narrative')) && <CodeSourceFooter code={ex.code} />}{/* v0.10.2482 — anlatım gövdesi künyeyi kendi katlanır parçasında çizer */}
             {ex && !turn.pending && !!ex.evidenceTraceIds?.length && (
               <div data-explain-traces="" style={{ marginTop: 8 }}>
-                <div className="cell-hint" style={{ marginBottom: 4 }}>Kanıt trace'leri ({ex.evidenceTraceIds.length})</div>
+                <div className="cell-hint" style={{ marginBottom: 4 }}>{tf('chatB.evTraces', lang, { n: ex.evidenceTraceIds.length })}</div>
                 {ex.evidenceTraceIds.map(id => (
-                  <EvidenceRow key={id} id={id} title="Örnek trace satırına git"
+                  <EvidenceRow key={id} id={id} title={t('chatB.evTraces.rowTitle', lang)}
                     onClick={() => {
                       // Sayfada satır varsa ona odaklan; yoksa trace'i aç.
                       const sel = `[data-trace-id="${id.replace(/["\\]/g, '\\$&')}"]`;
@@ -1273,7 +1283,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
             {/* v0.10.63 — YARIM CEVAP TAM GİBİ OKUNMASIN (operatörün kararı, kırmızı değil). */}
             {turn.stopped && !turn.pending && (
               <div className="cm-msg-note">
-                ⏹ Durduruldu — bu cevap <b>yarım</b> kaldı.
+                {t('chatB.stopped.pre', lang)} <b>{t('chatB.stopped.b', lang)}</b>{t('chatB.stopped.post', lang)}
               </div>
             )}
           </>
@@ -1284,7 +1294,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
         )}
         {/* v0.10.650 — hata sonrası soru kaybolmasın: yalnız son hatalı turda (kap geçirir). */}
         {turn.error && !turn.pending && onRetry && (
-          <div style={{ marginTop: 6 }}><Button variant="secondary" size="sm" onClick={onRetry}>↺ Yeniden dene</Button></div>
+          <div style={{ marginTop: 6 }}><Button variant="secondary" size="sm" onClick={onRetry}>{t('chatB.retryBtn', lang)}</Button></div>
         )}
         {/* v0.10.1137 — ilk token gelene dek "Düşünüyor…"; v0.10.1384 — tek tip gösterge (AiThinking). */}
         {thinkingOnly && <div className="cm-wait-center"><AiThinking variant="row" label={turn.statusLine} /></div>}
@@ -1301,9 +1311,9 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
       {/* Derin-link çipleri (v0.9.419; v0.10.546 etiketli "Aç →" satırı). Dış
           URL <a target=_blank> (v0.9.709), iç link SPA <Link>. */}
       {!!effLinks.length && !turn.pending && !turn.error && (
-        <div className="ai-links" role="group" aria-label="İlgili sayfalar"
+        <div className="ai-links" role="group" aria-label={t('chatB.links.aria', lang)}
           onClickCapture={e => { const a = (e.target as HTMLElement).closest?.('a[href]'); if (a) signal('link_click', a.getAttribute('href') ?? undefined); }}>
-          <span className="ai-links__cap">Aç →</span>
+          <span className="ai-links__cap">{t('chatB.links.cap', lang)}</span>
           {effLinks.map((l, i) => (
             /^https?:/i.test(l.href) ? (
               <a key={i} href={l.href} target="_blank" rel="noopener noreferrer" className="ai-link" title={l.href}>
@@ -1321,33 +1331,33 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
       {/* Eylem satırı — kopyala + 👍/👎 (tamamlanmış cevap). v0.10.1137: üstüne
           gelince / odakta görünür, dokunmatikte hep görünür (globals.css). */}
       {done && (
-        <div className="cm-msg-actions" role="toolbar" aria-label="Cevap eylemleri">
+        <div className="cm-msg-actions" role="toolbar" aria-label={t('chatB.actions.aria', lang)}>
           <Button variant="ghost" size="sm" onClick={copy}
-            title="Kopyala (düz metin)" aria-label="Cevabı kopyala"
+            title={t('chatB.copy.title', lang)} aria-label={t('chatB.copy.aria', lang)}
             className={copied ? 'is-ok' : undefined}>
-            {copied ? '✓ Kopyalandı' : '⧉ Kopyala'}
+            {copied ? t('chatB.copied', lang) : t('chatB.copy', lang)}
           </Button>
           {/* v0.10.1393 — 👍/👎 rayı kaldırıldı (operatör; oy zayıf sinyal). */}
           {/* v0.10.1138 — yeniden üret: yalnız son cevapta, akarken kapalı. */}
           {onRegenerate && (
             <Button variant="ghost" size="sm" onClick={onRegenerate} disabled={busy}
               /* v0.10.1406 — açıklama turunda ↻ önbelleği atlar (useChatThread.regenerate fresh:true). */
-              title={ex ? 'Yeniden üret — taze cevap, önbellek atlanır' : "Aynı soruyu yeniden sor; bu cevap 'önceki cevap' olarak saklanır"} aria-label="Cevabı yeniden üret">
-              ↻ Yeniden üret
+              title={ex ? t('chatB.regen.titleFresh', lang) : t('chatB.regen.title', lang)} aria-label={t('chatB.regen.aria', lang)}>
+              {t('chatB.regen', lang)}
             </Button>
           )}
           {actionsExtra /* v0.10.1659 — v2 yuvası (Not) */}
           {/* v0.10.1443 — cevabın bütün grafikleri tek panoya (≥2 çevrilebilen panel). */}
           {dashPanels.length >= 2 && <AddToDashboardButton panels={dashPanels} mode="all" />}
           {versions && versions.total > 1 && (
-            <span className="cm-msg-versions" role="group" aria-label="Cevap sürümleri">
+            <span className="cm-msg-versions" role="group" aria-label={t('chatB.versions.aria', lang)}>
               <Button variant="ghost" size="sm" disabled={versions.index === 0 || busy}
-                onClick={() => versions.onSelect(versions.index - 1)} aria-label="Önceki cevap">‹</Button>
+                onClick={() => versions.onSelect(versions.index - 1)} aria-label={t('chatB.versions.prevAria', lang)}>‹</Button>
               <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-                {versions.index < versions.total - 1 ? 'önceki cevap' : 'cevap'} ({versions.index + 1}/{versions.total})
+                {versions.index < versions.total - 1 ? t('chatB.versions.prev', lang) : t('chatB.versions.cur', lang)} ({versions.index + 1}/{versions.total})
               </span>
               <Button variant="ghost" size="sm" disabled={versions.index === versions.total - 1 || busy}
-                onClick={() => versions.onSelect(versions.index + 1)} aria-label="Sonraki cevap">›</Button>
+                onClick={() => versions.onSelect(versions.index + 1)} aria-label={t('chatB.versions.nextAria', lang)}>›</Button>
             </span>
           )}
         </div>
@@ -1362,6 +1372,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
 
 // UserBubble — v0.10.1138: kullanıcı mesajı + (son mesajda) satır-içi düzenleyici.
 function UserBubble({ turn, onEdit, busy }: { turn: ChatTurn; onEdit?: (text: string) => void; busy?: boolean }) {
+  const lang = useLang();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(turn.text ?? '');
   if (editing && onEdit) {
@@ -1370,13 +1381,13 @@ function UserBubble({ turn, onEdit, busy }: { turn: ChatTurn; onEdit?: (text: st
       <div className="cm-msg cm-msg--user">
         <form className="cm-msg-edit" style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%', maxWidth: 560 }}
           onSubmit={e => { e.preventDefault(); submit(); }}>
-          <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={3} aria-label="Mesajı düzenle" autoFocus
+          <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={3} aria-label={t('chatB.edit.aria', lang)} autoFocus
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
             }} />
           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-            <Button variant="secondary" size="sm" type="button" onClick={() => { setEditing(false); setDraft(turn.text ?? ''); }}>Vazgeç</Button>
-            <Button variant="primary" size="sm" type="submit" disabled={!draft.trim() || busy}>Gönder</Button>
+            <Button variant="secondary" size="sm" type="button" onClick={() => { setEditing(false); setDraft(turn.text ?? ''); }}>{t('chatB.edit.cancel', lang)}</Button>
+            <Button variant="primary" size="sm" type="submit" disabled={!draft.trim() || busy}>{t('chatB.edit.send', lang)}</Button>
           </div>
         </form>
       </div>
@@ -1389,9 +1400,9 @@ function UserBubble({ turn, onEdit, busy }: { turn: ChatTurn; onEdit?: (text: st
         {turn.error ? <ChatErrorLine error={turn.error} isUser /> : <ChatMarkdown text={turn.text ?? ''} />}
       </div>
       {onEdit && !turn.error && (
-        <div className="cm-msg-actions cm-msg-actions--user" role="toolbar" aria-label="Mesaj eylemleri">
+        <div className="cm-msg-actions cm-msg-actions--user" role="toolbar" aria-label={t('chatB.user.actions.aria', lang)}>
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setDraft(turn.text ?? ''); setEditing(true); }}
-            title="Mesajı düzenle — sonrası silinir ve yeniden sorulur" aria-label="Mesajı düzenle">✎ Düzenle</Button>
+            title={t('chatB.edit.title', lang)} aria-label={t('chatB.edit.aria', lang)}>{t('chatB.edit', lang)}</Button>
         </div>
       )}
     </div>

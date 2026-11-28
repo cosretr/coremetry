@@ -80,7 +80,7 @@ describe('trace başlığı: ölçüler sağa dayalı kümede (v0.10.1347)', () 
     expect(trace.slice(headline, hlEnd)).not.toMatch(/CopyButton|trace-hdr__id|b-err|errSpans/);
     expect(trace).not.toContain('trace-hdr__meta');
     // Trace id + kopyala + durum satır 1'de DEĞİL (v0.10.1528 — kartın önündeki gri satırda).
-    for (const n of ['<code className="trace-hdr__id"', '<CopyButton value={id}', '<span className="badge b-err">ERROR</span>', 'error span{errSpans']) {
+    for (const n of ['<code className="trace-hdr__id"', '<CopyButton value={id}', '<span className="badge b-err">ERROR</span>', "tr(errSpans === 1 ? 'traceD.errSpan' : 'traceD.errSpans')"]) {
       expect(trace.indexOf(n), `${n} satır 1'de olmamalı`).toBeLessThan(row1);
     }
     // Başlık: ellipsis + tam ad title'da.
@@ -138,14 +138,14 @@ describe('trace başlığı: ölçüler sağa dayalı kümede (v0.10.1347)', () 
     // Sıra: etiket → TAM id (v0.10.1965, kırpma yok) → kopyala → ERROR → hatalı span.
     const seq = ["<span className=\"trace-hdr__idlabel\">{tr('trace.hdr.traceId')}:</span>",
       '<code className="trace-hdr__id" title={id}>{id}</code>',
-      '<CopyButton value={id} title="Copy trace ID" />',
+      "<CopyButton value={id} title={tr('traceD.copyId')} />", // v0.10.2486 — metinler katalogda
       '{spans && spans.length > 0 && (',
-      '<span className="badge b-err">ERROR</span>', '<span className="sr-only">OK</span>', 'error span{errSpans'].map(n => group.indexOf(n));
+      '<span className="badge b-err">ERROR</span>', '<span className="sr-only">OK</span>', "tr(errSpans === 1 ? 'traceD.errSpan' : 'traceD.errSpans')"].map(n => group.indexOf(n));
     for (const i of seq) expect(i).toBeGreaterThan(-1);
     for (let k = 1; k < seq.length; k++) expect(seq[k]).toBeGreaterThan(seq[k - 1]);
     // Etiket / id / kopyala span koşulundan ÖNCE (span'siz de görünür); durum koşulun içinde.
     expect(group.slice(0, seq[3])).not.toMatch(/spans/);
-    for (const n of ['<code className="trace-hdr__id"', '<CopyButton value={id}', 'error span{errSpans', 'data-testid="trace-hdr-traceid"']) {
+    for (const n of ['<code className="trace-hdr__id"', '<CopyButton value={id}', "tr(errSpans === 1 ? 'traceD.errSpan' : 'traceD.errSpans')", 'data-testid="trace-hdr-traceid"']) {
       expect(trace.split(n).length - 1, n).toBe(1);
     }
     // Kopyala kısaltılmış metni değil tam id'yi alır.
@@ -158,7 +158,7 @@ describe('trace başlığı: ölçüler sağa dayalı kümede (v0.10.1347)', () 
     expect(trace).not.toContain('trace-tabrow');
     expect(css).not.toContain('.trace-tabrow {');
     expect(css).not.toContain('.trace-tabrow > .tab-strip');
-    expect(trace).toContain('<TabStrip ariaLabel="Trace görünümü" value={tab} onChange={setTab} style={{ marginBottom: 10 }} tabs={[');
+    expect(trace).toContain("<TabStrip ariaLabel={tr('traceD.tabsAria')} value={tab} onChange={setTab} style={{ marginBottom: 10 }} tabs={["); // v0.10.2486 — aria katalogda
     // i18n etiketi iki dilde.
     const i18n = read('../lib/i18n.tr.ts') + read('../lib/i18n.en.ts'); // v0.10.2307 — EN ayrı dosyada
     expect(i18n.split("'trace.hdr.traceId':").length - 1).toBe(2);

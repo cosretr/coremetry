@@ -15,7 +15,7 @@ describe('v0.10.807 — cached tokens', () => {
   it('/ai: KPI yalnız kolon varken; satır hücresi cachedTokens ile yüzde', () => {
     const src = readFileSync(resolve(__dirname, '../AIObservability.tsx'), 'utf8');
     expect(src).toContain('{stats.cachedCol && (');
-    expect(src).toContain('<KPI label="Önbellek (giriş)"');
+    expect(src).toContain("<KPI label={tn('aiObs.kpi.cache')}"); // v0.10.2486 — 'Önbellek (giriş)' katalogda
     expect(src).toContain('cachedPctLabel(c.cachedTokens, c.inputTokens)');
     const t = readFileSync(resolve(__dirname, '../../lib/types.ts'), 'utf8');
     expect(t).toContain('cachedTokens?: number;');

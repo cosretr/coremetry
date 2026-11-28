@@ -23,6 +23,15 @@ vi.mock('@/components/CosreChart', () => ({ CosreChart: () => <div>[grafik]</div
 
 import { ChatBubble } from './ChatBubble';
 import type { ChatTurn, RagSource } from '@/lib/types';
+import { setUserLang } from '@/lib/i18n';
+// v0.10.2486 dilim 2 — metinler katalogda; bu test Türkçe arayüzü pinler.
+// localStorage Node'da yok/boş olabilir: dil tercihi için bellek içi depo.
+beforeEach(() => {
+  const mem = new Map<string, string>();
+  vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, String(v)); }, removeItem: (k: string) => { mem.delete(k); } });
+  setUserLang('tr');
+});
+afterEach(() => { setUserLang(null); vi.unstubAllGlobals(); });
 
 let host: HTMLDivElement;
 let root: Root;

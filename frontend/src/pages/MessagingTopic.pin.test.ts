@@ -41,7 +41,7 @@ describe('rota kaydı', () => {
     expect(app).toContain('<Route path="/messaging"      element={<Messaging />} />');
   });
   it('sayfa kabuğu: PageShell + Topbar (range seçici)', () => {
-    expect(page).toContain('<Topbar title="Topic" range={range} onRangeChange={setRange} />');
+    expect(page).toContain("<Topbar title={tn('page.topic')} range={range} onRangeChange={setRange} />"); // v0.10.2486 — başlık katalogdan
     expect(page).toContain('<PageShell>');
     // Env bayrağı VERİLMEZ: messaging okumaları `?env=` uygulamıyor.
     expect(page).not.toContain('envApplies');

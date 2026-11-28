@@ -14,6 +14,7 @@
 import { Link } from 'react-router';
 import type { ChatOperationPayload } from '@/lib/types';
 import { chatLinkTargetProps, useChatLinkNewTab } from './chatLinkTarget';
+import { t, useLang } from '@/lib/i18n';
 import {
   deltaLabel, errRate, fmtMs, opAlternativesLine, opEndpointExceptionRows, opEndpointExceptionsNote, opEndpointHref,
   opEndpointLabel, opExceptionRows, opExceptionsNote, worse,
@@ -25,6 +26,7 @@ export function OperationCard({ op, part, headline = false }: {
   /** Cevap cümlesi var: başlık + Çağrı / Hata oranı / p99 satırı tekrar edilmez. */
   headline?: boolean;
 }) {
+  const lang = useLang(); // v0.10.2486 dilim 2 — Hatalar bağlantısı menü adıyla
   const linkProps = chatLinkTargetProps(useChatLinkNewTab());
   const errTraces = (op.traces ?? []).filter(t => t.error);
   const oracle = op.oracleErrors ?? [];
@@ -43,7 +45,7 @@ export function OperationCard({ op, part, headline = false }: {
       <div className="cm-trace-list__more" data-opcard="links">
         <Link to={op.tracesHref} {...linkProps}>Traces'te aç →</Link>
         {epHref && <> · <Link to={epHref} {...linkProps}>Endpoint sayfası →</Link></>}
-        {excHref && <> · <Link to={excHref} {...linkProps}>Exceptions →</Link></>}
+        {excHref && <> · <Link to={excHref} {...linkProps}>{t('nav.problems', lang)} →</Link></>}
         <span className="cell-hint"> · {(op.traces ?? []).length} trace, {errTraces.length} hatalı gösterildi</span>
       </div>
     );
@@ -95,7 +97,7 @@ export function OperationCard({ op, part, headline = false }: {
                   {r.priority && <span className="cell-hint">{r.priority}</span>}
                   <span className={r.burst ? 'cell-err' : undefined}>{r.count}</span>
                   {r.lastSeen && <span className="cell-hint">{r.lastSeen}</span>}
-                  {r.href && <Link to={r.href} style={{ marginLeft: 'auto' }} {...linkProps}>Exceptions →</Link>}
+                  {r.href && <Link to={r.href} style={{ marginLeft: 'auto' }} {...linkProps}>{t('nav.problems', lang)} →</Link>}
                 </li>
               ))}
             </ul>
@@ -113,7 +115,7 @@ export function OperationCard({ op, part, headline = false }: {
                   <span className="badge b-err mono">{r.code}</span>
                   <span>{r.count}</span>
                   {r.lastSeen && <span className="cell-hint">{r.lastSeen}</span>}
-                  {r.href && <Link to={r.href} style={{ marginLeft: 'auto' }} {...linkProps}>Exceptions →</Link>}
+                  {r.href && <Link to={r.href} style={{ marginLeft: 'auto' }} {...linkProps}>{t('nav.problems', lang)} →</Link>}
                 </li>
               ))}
             </ul>

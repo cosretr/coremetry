@@ -22,7 +22,7 @@ describe('v0.10.1463 — ai_calls satırından trace linki', () => {
     expect(gate).toBeGreaterThan(-1);
     expect(link).toBeGreaterThan(gate);
     expect(src.slice(gate, link)).toMatch(/^\{call\.traceQueryable\s*\?\s*$/);
-    expect(src).toContain("title=\"trace harici collector'da");
+    expect(src).toContain("title={tn('aiObs.drawer.traceExternalTitle')}"); // v0.10.2486 — katalogda
   });
   it('tablo satırı da ayrıntı yanıtını (traceQueryable) çeker', () => {
     const src = readFileSync(resolve(__dirname, '../AIObservability.tsx'), 'utf8');

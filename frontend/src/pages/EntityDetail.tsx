@@ -28,7 +28,7 @@ import { entityHref, entityLiveness } from '@/lib/entityHref';
 import { serviceHref } from '@/lib/serviceHref';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { EntityDetailResponse, EntityRecord, EntityServiceRow, EntitySeenAgg, EntityServicesResponse, TimeRange } from '@/lib/types';
-import { useLang } from '@/lib/i18n';
+import { t, tf, useLang, type Lang } from '@/lib/i18n';
 import { duration } from '@/lib/format/duration';
 import { percent } from '@/lib/format/percent';
 import { count, fixed } from '@/lib/format/number';
@@ -43,6 +43,7 @@ const ENTITY_URL_SPEC = urlSpec({
 
 export default function EntityDetail() {
   const [{ id, at }] = useUrlParams(ENTITY_URL_SPEC);
+  const lang = useLang();
   const { range, setRange } = usePageZoomRange(DEFAULT_RANGE_PRESET);
   const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
   const { enabled, loading } = useEntityEnabled();
@@ -56,14 +57,14 @@ export default function EntityDetail() {
     <>
       <Topbar title={`${type} · ${name}`} range={range} onRangeChange={setRange} />
       <PageShell>
-        {!id && <Empty icon="—" title="Entity belirtilmedi (id parametresi gerekli)." />}
+        {!id && <Empty icon="—" title={t('entityD.noId', lang)} />}
         {!!id && !enabled && !loading && (
-          <Empty icon="—" title="Entity katmanı kapalı.">Settings → K8s entity katmanı'ndan açılır; bu sayfa o kayıtları gösterir.</Empty>
+          <Empty icon="—" title={t('entityD.disabled', lang)}>{t('entityD.disabledHint', lang)}</Empty>
         )}
         {!!id && enabled && (entQ.isPending
           ? <Spinner />
           : (entQ.error || !entQ.data)
-            ? <Empty icon="—" title="Kayıt bulunamadı.">
+            ? <Empty icon="—" title={t('entityD.notFound', lang)}>
                 <span className="mono">{id}</span>
                 <EntityNotFoundLinks id={id} />
               </Empty>
@@ -77,6 +78,7 @@ export default function EntityDetail() {
 // bulamıyor") — envanterde olmayan bir iş yükü kimliği çıkmaz sokak değil:
 // kimlikten (wl:<cid>/<ns>/<tür>/<ad>) servis araması ve rollout listesi.
 function EntityNotFoundLinks({ id }: { id: string }) {
+  const lang = useLang();
   if (!id.startsWith('wl:')) return null;
   const parts = id.slice(3).split('/');
   if (parts.length < 4) return null;
@@ -86,8 +88,8 @@ function EntityNotFoundLinks({ id }: { id: string }) {
   const roQ = new URLSearchParams({ workload: name, namespace: ns });
   return (
     <div style={{ marginTop: 8, display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-      <Link to={`/services?${svcQ.toString()}`}>Servislerde ara: {name}</Link>
-      <Link to={`/rollouts?${roQ.toString()}`}>Bu workload'un rollout'ları</Link>
+      <Link to={`/services?${svcQ.toString()}`}>{tf('entityD.searchServices', lang, { name })}</Link>
+      <Link to={`/rollouts?${roQ.toString()}`}>{t('entityD.workloadChanges', lang)}</Link>
     </div>
   );
 }
@@ -95,21 +97,22 @@ function EntityNotFoundLinks({ id }: { id: string }) {
 // v0.10.947 (tablo standardı T1) — iki kayıt listesi (cluster entity'sinde
 // penceredeki her servis / pod gelir) useDataTable'da: sıra `initialSort`
 // verilmediği için sunucununki; sayılar arayüz fontunda, sağa yaslı (S2).
-const SVC_COLS: ColumnDef<EntityServiceRow>[] = [
-  { id: 'service', label: 'Service', sortValue: s => s.service, naturalDir: 'asc', flex: true, minWidth: 160 },
-  { id: 'pods',    label: 'Pods',    sortValue: s => s.pods,    numeric: true, width: 80 },
-  { id: 'spans',   label: 'Spans',   sortValue: s => s.spans,   numeric: true, width: 100 },
-  { id: 'errors',  label: 'Errors',  sortValue: s => s.errors,  numeric: true, width: 90 },
-  { id: 'avgMs',   label: 'Avg ms',  sortValue: s => s.avgMs,   numeric: true, width: 90 },
+// i18n — başlıklar arayüz dilinde (PodServicesTable deseni).
+const svcCols = (lang: Lang): ColumnDef<EntityServiceRow>[] => [
+  { id: 'service', label: t('podpage.col.service', lang), sortValue: s => s.service, naturalDir: 'asc', flex: true, minWidth: 160 },
+  { id: 'pods',    label: t('entityD.col.pods', lang),  sortValue: s => s.pods,    numeric: true, width: 80 },
+  { id: 'spans',   label: t('podpage.col.spans', lang), sortValue: s => s.spans,   numeric: true, width: 100 },
+  { id: 'errors',  label: t('podpage.col.errors', lang), sortValue: s => s.errors,  numeric: true, width: 90 },
+  { id: 'avgMs',   label: t('podpage.col.avgMs', lang), sortValue: s => s.avgMs,   numeric: true, width: 90 },
 ];
-const POD_SVC_COLS: ColumnDef<EntitySeenAgg>[] = [
-  { id: 'pod',       label: 'Pod',       sortValue: r => r.pod,       naturalDir: 'asc', flex: true, minWidth: 160 },
-  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', width: 160 },
-  { id: 'service',   label: 'Service',   sortValue: r => r.service,   naturalDir: 'asc', width: 200 },
-  { id: 'spans',     label: 'Spans',     sortValue: r => r.spans,     numeric: true, width: 90 },
-  { id: 'errors',    label: 'Errors',    sortValue: r => r.errors,    numeric: true, width: 80 },
-  { id: 'avgMs',     label: 'Avg ms',    sortValue: r => r.avgMs,     numeric: true, width: 90 },
-  { id: 'lastSeen',  label: 'Last seen', sortValue: r => Date.parse(r.lastSeen), width: 170 },
+const podSvcCols = (lang: Lang): ColumnDef<EntitySeenAgg>[] => [
+  { id: 'pod',       label: t('entityD.col.pod', lang), sortValue: r => r.pod,       naturalDir: 'asc', flex: true, minWidth: 160 },
+  { id: 'namespace', label: t('entityD.col.namespace', lang), sortValue: r => r.namespace, naturalDir: 'asc', width: 160 },
+  { id: 'service',   label: t('podpage.col.service', lang), sortValue: r => r.service,   naturalDir: 'asc', width: 200 },
+  { id: 'spans',     label: t('podpage.col.spans', lang), sortValue: r => r.spans,     numeric: true, width: 90 },
+  { id: 'errors',    label: t('podpage.col.errors', lang), sortValue: r => r.errors,    numeric: true, width: 80 },
+  { id: 'avgMs',     label: t('podpage.col.avgMs', lang), sortValue: r => r.avgMs,     numeric: true, width: 90 },
+  { id: 'lastSeen',  label: t('podpage.col.lastSeen', lang), sortValue: r => Date.parse(r.lastSeen), width: 170 },
 ];
 
 // v0.10.2263 — /api/logs?entity= kapsamı olan tipler (logs_entity.go).
@@ -128,17 +131,19 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
   const labels = Object.entries(entity.labels ?? {}).sort(([a], [b]) => a.localeCompare(b));
   const kids = Object.entries(children ?? {}).sort(([a], [b]) => a.localeCompare(b));
   const rows = svc?.rows ?? [];
-  const svcDt = useDataTable<EntityServiceRow>({ storageKey: 'entity-detail-services', columns: SVC_COLS, rows: svc?.services ?? [] });
-  const podDt = useDataTable<EntitySeenAgg>({ storageKey: 'entity-detail-pod-services', columns: POD_SVC_COLS, rows });
+  const svcColsL = useMemo(() => svcCols(lang), [lang]);
+  const podColsL = useMemo(() => podSvcCols(lang), [lang]);
+  const svcDt = useDataTable<EntityServiceRow>({ storageKey: 'entity-detail-services', columns: svcColsL, rows: svc?.services ?? [] });
+  const podDt = useDataTable<EntitySeenAgg>({ storageKey: 'entity-detail-pod-services', columns: podColsL, rows });
   // v0.10.954 — tablo standardı T12: servis tablosunun yükleniyor / hata /
   // boş durumu tablonun İÇİNDE, başlık durur (sunucu hata metni korunur).
   // Yenileme eski satırlar dururken düşerse hata eskisi gibi tablonun
   // üstünde (satırlar kazanır). Pod × servis tablosu bilinçli kendini
   // gizler (boşken çizilmez) — kalır.
   const svcState: Omit<DataTableStateProps<EntityServiceRow>, 'dt'> =
-    svcError ? { kind: 'error', message: `Servisler okunamadı: ${svcError}` }
+    svcError ? { kind: 'error', message: tf('entityD.svcReadErr', lang, { err: svcError }) }
     : !svc ? { kind: 'loading' }
-    : { kind: 'empty', message: 'Bu pencerede bu entity altından span geçmedi' };
+    : { kind: 'empty', message: t('entityD.svcEmpty', lang) };
   return (
     <Stack gap={4}>
       <Row gap={2} wrap>
@@ -154,21 +159,21 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
         <span className="field-hint">›</span>
         <Badge tone="info" title={entity.id}>{entity.type === 'workload' ? `${entity.labels?.kind ?? 'workload'}/${entity.name}` : entity.name}</Badge>
         {/* v0.10.929 (K5) — 'live' olağan yaşam döngüsü: nötr; stale/gone renkli kalır. */}
-        {live === 'live' && <Badge>live</Badge>}
-        {live === 'stale' && <Badge tone="warning" title="Son senkronda görülmedi; ömür henüz kapanmadı">stale</Badge>}
-        {live === 'gone' && <Badge tone="danger">artık mevcut değil</Badge>}
-        {logCov?.hasLogs === true && <Badge title={`Son ${logCov.window} içinde bu entity'ye ait log var (${logCov.backend ?? 'log'}; ${fmtDateTime(new Date(logCov.checkedAt))} kontrolü)`}>log var</Badge>}
-        {logCov?.hasLogs === false && <Badge tone="neutral" title={`Son ${logCov.window} içinde bu entity'ye ait log bulunamadı (${fmtDateTime(new Date(logCov.checkedAt))} kontrolü)`}>log yok (1 sa)</Badge>}
+        {live === 'live' && <Badge>{t('entityD.live', lang)}</Badge>}
+        {live === 'stale' && <Badge tone="warning" title={t('entityD.staleTitle', lang)}>{t('entityD.stale', lang)}</Badge>}
+        {live === 'gone' && <Badge tone="danger">{t('entityD.gone', lang)}</Badge>}
+        {logCov?.hasLogs === true && <Badge title={tf('entityD.logsYesTitle', lang, { window: logCov.window, backend: logCov.backend ?? 'log', at: fmtDateTime(new Date(logCov.checkedAt)) })}>{t('entityD.logsYes', lang)}</Badge>}
+        {logCov?.hasLogs === false && <Badge tone="neutral" title={tf('entityD.logsNoTitle', lang, { window: logCov.window, at: fmtDateTime(new Date(logCov.checkedAt)) })}>{t('entityD.logsNo', lang)}</Badge>}
       </Row>
       <Row gap={2} wrap>
         <span className="field-hint">
           {live === 'gone'
-            ? `son görülme ${fmtDateTime(new Date(entity.lastSeen))} · ömür ${fmtDateTime(new Date(entity.validFrom))} → ${entity.validTo ? fmtDateTime(new Date(entity.validTo)) : '—'}`
-            : `ömür ${fmtDateTime(new Date(entity.validFrom))} → (açık) · son görülme ${fmtDateTime(new Date(entity.lastSeen))}`}
-          {' · '}kaynak {entity.source}{entity.uid ? ` · uid ${entity.uid}` : ''}
+            ? tf('entityD.lifeGone', lang, { seen: fmtDateTime(new Date(entity.lastSeen)), from: fmtDateTime(new Date(entity.validFrom)), to: entity.validTo ? fmtDateTime(new Date(entity.validTo)) : '—' })
+            : tf('entityD.lifeLive', lang, { from: fmtDateTime(new Date(entity.validFrom)), seen: fmtDateTime(new Date(entity.lastSeen)) })}
+          {' · '}{tf('entityD.source', lang, { source: entity.source })}{entity.uid ? ` · uid ${entity.uid}` : ''}
         </span>
         {!!at && atMatch === false && (
-          <Badge tone="warning" title={`İstenen an: ${fmtDateTime(new Date(at))}`}>o anda geçerli kayıt yok — en yakın ömür gösteriliyor</Badge>
+          <Badge tone="warning" title={tf('entityD.atTitle', lang, { at: fmtDateTime(new Date(at)) })}>{t('entityD.atNoMatch', lang)}</Badge>
         )}
       </Row>
       {/* v0.10.139 (adım 5) — node / namespace: kapasite + kullanım (Thanos),
@@ -177,21 +182,21 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
       {entity.type === 'namespace' && cluster && <NamespacePanel entity={entity} clusterName={cluster.name} from={from} to={to} svc={svc} />}
       {kids.length > 0 && (
         <Row gap={2} wrap>
-          <span className="field-hint">children:</span>
+          <span className="field-hint">{t('entityD.children', lang)}</span>
           {kids.map(([t, n]) => <Badge key={t} tone="neutral">{t} × {n}</Badge>)}
         </Row>
       )}
       {labels.length > 0 && (
         <Row gap={2} wrap>
-          <span className="field-hint">labels:</span>
+          <span className="field-hint">{t('entityD.labels', lang)}</span>
           {(showLabels ? labels : labels.slice(0, 12)).map(([k, v]) => <Badge key={k} tone="neutral" title={`${k}=${v}`}>{k}={v}</Badge>)}
           {labels.length > 12 && (
-            <Button variant="secondary" size="xs" onClick={() => setShowLabels(v => !v)}>{showLabels ? 'daha az' : `+${labels.length - 12}`}</Button>
+            <Button variant="secondary" size="xs" onClick={() => setShowLabels(v => !v)}>{showLabels ? t('entityD.less', lang) : `+${labels.length - 12}`}</Button>
           )}
         </Row>
       )}
-      <h3>Services under this {entity.type}</h3>
-      {svcError && svc && svc.services.length > 0 && <Empty icon="!" title="Servisler yüklenemedi." compact>{svcError}</Empty>}
+      <h3>{tf('entityD.servicesUnder', lang, { type: entity.type })}</h3>
+      {svcError && svc && svc.services.length > 0 && <Empty icon="!" title={t('entityD.svcLoadFail', lang)} compact>{svcError}</Empty>}
       {/* v0.10.947 — .table-wrap: DataTableColgroup kabı bulamazsa fitColumnWidths
           çalışmaz; fixed düzende flex Service kolonu sıfıra inebilir. */}
       <div className="table-wrap">
@@ -219,9 +224,9 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
           hata durumu yukarıdaki servis tablosunun içinde. */}
       {rows.length > 0 && (
         <>
-          <h3>Pods × services ({rows.length})</h3>
+          <h3>{tf('entityD.podsXServices', lang, { n: rows.length })}</h3>
           {/* v0.10.190 — namespace'siz span satırları pod adıyla eşlendi; ilan */}
-          {(svc?.nsMissingRows ?? 0) > 0 && <div className="field-hint">{svc!.nsMissingRows} satır namespace'siz span'lerden (bu cluster'ın collector'ı k8s.namespace.name basmıyor) — pod adı cluster içinde tek varsayıldı.</div>}
+          {(svc?.nsMissingRows ?? 0) > 0 && <div className="field-hint">{tf('entityD.nsMissing', lang, { n: svc!.nsMissingRows ?? 0 })}</div>}
           <div className="table-wrap">
             <table {...podDt.tableProps}>
               <DataTableColgroup dt={podDt} />
@@ -234,7 +239,7 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
                       {r.namespace ? (
                         <Link to={entityHref({ type: 'pod', id: `pod:${entity.clusterId}/${r.namespace}/${r.pod}`, name: r.pod, namespace: r.namespace, clusterId: entity.clusterId }, hrefOpts)} className="sec"
                           title={`${cluster?.name ?? entity.clusterId} / ${r.namespace} / ${r.pod}`}>{r.pod}</Link>
-                      ) : <span className="mono" title="namespace span'de yok — entity linki yok">{r.pod}</span>}
+                      ) : <span className="mono" title={t('entityD.noNsTitle', lang)}>{r.pod}</span>}
                     </DataTableCell>
                     <DataTableCell dt={podDt} col="namespace" row={r} value={r.namespace} />
                     <DataTableCell dt={podDt} col="service" row={r} title={r.service}>
@@ -249,20 +254,21 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
               </tbody>
             </table>
           </div>
-          {rows.length > 200 && <span className="field-hint">ilk 200 satır gösteriliyor</span>}
+          {rows.length > 200 && <span className="field-hint">{t('entityD.first200', lang)}</span>}
         </>
       )}
       {lifetimes.length > 1 && (
         <>
-          <h3>Lifetimes ({lifetimes.length})</h3>
+          <h3>{tf('entityD.lifetimes', lang, { n: lifetimes.length })}</h3>
           {/* v0.10.947 — statik tablo (T1): aynı entity'nin ömürleri, sunucu ≤ 50 (pratikte 1–3), sunucu sırası anlamlı; PodLifetimesTable ile aynı. */}
           <table>
-            <thead><tr><th>Valid from</th><th>Valid to</th><th>Source</th><th>uid</th></tr></thead>
+            {/* i18n-exempt: uid alan adı */}
+            <thead><tr><th>{t('entityD.validFrom', lang)}</th><th>{t('entityD.validTo', lang)}</th><th>{t('podpage.lt.source', lang)}</th><th>uid</th></tr></thead>
             <tbody>
               {lifetimes.map(l => (
                 <tr key={`${l.validFrom}|${l.uid ?? ''}`}>
                   <td className="mono">{fmtDateTime(new Date(l.validFrom))}</td>
-                  <td className="mono">{l.validTo ? fmtDateTime(new Date(l.validTo)) : '(açık)'}</td>
+                  <td className="mono">{l.validTo ? fmtDateTime(new Date(l.validTo)) : t('entityD.open', lang)}</td>
                   <td>{l.source}</td>
                   <td className="mono">{l.uid ?? '—'}</td>
                 </tr>
@@ -290,13 +296,13 @@ function ImpactStrip({ id, from, to, svc }: { id: string; from: number; to: numb
   const msLabel = (v?: number) => (v === undefined || v <= 0 ? '—' : duration(v, lang));
   return (
     <Row gap={3} wrap>
-      <Stat label="pods" value={svc ? `${svc.pods.length}${capped ? '+' : ''}` : '—'} sub={capped ? 'tavan: ilk 500 pod' : undefined} tone={capped ? 'warn' : undefined} />
-      <Stat label="services" value={svc ? String(svc.services.length) : '—'} />
-      <Stat label="spans" value={svc ? `${count(spans, lang)}${capped ? '+' : ''}` : '—'} sub={capped ? 'kısmi (satır tavanı)' : 'entity_seen_5m'} />
-      <Stat label="error %" value={svc && spans ? percent(errors / spans, lang, { from: 'ratio' }) : '—'} tone={spans ? errorTone((100 * errors) / spans) : undefined} />
-      <Stat label="entry p50" value={latQ.isError ? 'hata' : msLabel(l?.p50Ms)} />
-      <Stat label="entry p95" value={latQ.isError ? 'hata' : msLabel(l?.p95Ms)} />
-      <Stat label="entry p99" value={latQ.isError ? 'hata' : msLabel(l?.p99Ms)} sub={l ? `${count(l.entrySpans, lang)} entry spans${lat?.clamped ? ' · son 24 s' : ''}` : undefined} />
+      <Stat label={t('entityD.stat.pods', lang)} value={svc ? `${svc.pods.length}${capped ? '+' : ''}` : '—'} sub={capped ? t('entityD.capPods', lang) : undefined} tone={capped ? 'warn' : undefined} />
+      <Stat label={t('entityD.stat.services', lang)} value={svc ? String(svc.services.length) : '—'} />
+      <Stat label={t('entityD.stat.spans', lang)} value={svc ? `${count(spans, lang)}${capped ? '+' : ''}` : '—'} sub={capped ? t('entityD.capRows', lang) : 'entity_seen_5m'} />
+      <Stat label={t('entityD.stat.errPct', lang)} value={svc && spans ? percent(errors / spans, lang, { from: 'ratio' }) : '—'} tone={spans ? errorTone((100 * errors) / spans) : undefined} />
+      <Stat label={tf('entityD.stat.entry', lang, { q: 'p50' })} value={latQ.isError ? t('entityD.err', lang) : msLabel(l?.p50Ms)} />
+      <Stat label={tf('entityD.stat.entry', lang, { q: 'p95' })} value={latQ.isError ? t('entityD.err', lang) : msLabel(l?.p95Ms)} />
+      <Stat label={tf('entityD.stat.entry', lang, { q: 'p99' })} value={latQ.isError ? t('entityD.err', lang) : msLabel(l?.p99Ms)} sub={l ? `${tf('entityD.entrySpans', lang, { n: count(l.entrySpans, lang) })}${lat?.clamped ? t('entityD.last24', lang) : ''}` : undefined} />
     </Row>
   );
 }
@@ -335,30 +341,31 @@ function NodePanel({ entity, clusterName, from, to, svc }: { entity: EntityRecor
   return (
     <Stack gap={3}>
       <Row gap={3} wrap>
-        <Stat label="role" value={row?.role ?? '—'} />
-        <Stat label="CPU" value={row ? fmtCores(row.cpuCores) : nodesQ.isPending ? '…' : '—'} sub={row?.cpuPct != null ? `${percent(row.cpuPct, lang, { from: 'pct', digits: 0 })} of capacity` : undefined} tone={row?.cpuPct != null && row.cpuPct >= 90 ? 'err' : undefined} />
-        <Stat label="Mem" value={row ? fmtBytes(row.memBytes) : nodesQ.isPending ? '…' : '—'} sub={row?.memPct != null ? `${percent(row.memPct, lang, { from: 'pct', digits: 0 })} of capacity` : undefined} tone={row?.memPct != null && row.memPct >= 90 ? 'err' : undefined} />
-        {row?.netInBps != null && <Stat label="net in" value={`${fmtBytes(row.netInBps)}/s`} />}
-        {row?.netOutBps != null && <Stat label="net out" value={`${fmtBytes(row.netOutBps)}/s`} />}
-        {!row && !nodesQ.isPending && <span className="field-hint">Thanos'ta bu node için kapasite serisi yok{nodesQ.isError ? ' (sorgu hatası)' : ''}.</span>}
-        {clamped && <span className="field-hint">trend: son {THANOS_MAX_WINDOW_LABEL}</span>}
+        <Stat label={t('entityD.stat.role', lang)} value={row?.role ?? '—'} />
+        {/* i18n-exempt: CPU kısaltması */}
+        <Stat label="CPU" value={row ? fmtCores(row.cpuCores) : nodesQ.isPending ? '…' : '—'} sub={row?.cpuPct != null ? tf('entityD.ofCapacity', lang, { pct: percent(row.cpuPct, lang, { from: 'pct', digits: 0 }) }) : undefined} tone={row?.cpuPct != null && row.cpuPct >= 90 ? 'err' : undefined} />
+        <Stat label={t('entityD.stat.mem', lang)} value={row ? fmtBytes(row.memBytes) : nodesQ.isPending ? '…' : '—'} sub={row?.memPct != null ? tf('entityD.ofCapacity', lang, { pct: percent(row.memPct, lang, { from: 'pct', digits: 0 }) }) : undefined} tone={row?.memPct != null && row.memPct >= 90 ? 'err' : undefined} />
+        {row?.netInBps != null && <Stat label={t('entityD.stat.netIn', lang)} value={`${fmtBytes(row.netInBps)}/s`} />}
+        {row?.netOutBps != null && <Stat label={t('entityD.stat.netOut', lang)} value={`${fmtBytes(row.netOutBps)}/s`} />}
+        {!row && !nodesQ.isPending && <span className="field-hint">{tf('entityD.noCapacity', lang, { err: nodesQ.isError ? t('entityD.queryErr', lang) : '' })}</span>}
+        {clamped && <span className="field-hint">{tf('entityD.trendClamp', lang, { w: THANOS_MAX_WINDOW_LABEL })}</span>}
       </Row>
       <ImpactStrip id={entity.id} from={from} to={to} svc={svc} />
       {/* v0.10.187 (F4) — iki seri de yoksa üst üste iki boş blok yerine tek satır */}
       {!cpuQ.isPending && !memQ.isPending && cpuSeries.length === 0 && memSeries.length === 0 ? (
-        <Empty icon="—" title="Bu node için CPU/bellek serisi yok." compact>{cpuQ.isError || memQ.isError ? 'Thanos sorgusu hata verdi.' : `node-exporter instance'ı ${nodeSel} ile eşleşmedi (kube_node_info internal_ip / node adı).`}</Empty>
+        <Empty icon="—" title={t('entityD.noCpuMem', lang)} compact>{cpuQ.isError || memQ.isError ? t('entityD.thanosErr', lang) : tf('entityD.noMatch', lang, { sel: nodeSel })}</Empty>
       ) : (
       <div className="ov-grid ov-charts-3 ov-mb">
         <div>
-          <div className="field-hint">CPU (cores)</div>
+          <div className="field-hint">{t('entityD.cpuCores', lang)}</div>
           {cpuQ.isPending ? <Spinner /> : cpuSeries.length === 0
-            ? <Empty icon="—" title="Bu node için CPU serisi yok." compact>{cpuQ.isError ? 'Thanos sorgusu hata verdi.' : `node-exporter instance'ı ${nodeSel} ile eşleşmedi (kube_node_info internal_ip / node adı).`}</Empty>
+            ? <Empty icon="—" title={t('entityD.noCpu', lang)} compact>{cpuQ.isError ? t('entityD.thanosErr', lang) : tf('entityD.noMatch', lang, { sel: nodeSel })}</Empty>
             : <MultiLineChart series={cpuSeries} height={180} unit="cores" xRange={xRange} syncKey={`entity-node:${entity.id}`} />}
         </div>
         <div>
-          <div className="field-hint">Memory (bytes)</div>
+          <div className="field-hint">{t('entityD.memBytes', lang)}</div>
           {memQ.isPending ? <Spinner /> : memSeries.length === 0
-            ? <Empty icon="—" title="Bu node için bellek serisi yok." compact>{memQ.isError ? 'Thanos sorgusu hata verdi.' : `node-exporter instance'ı ${nodeSel} ile eşleşmedi (kube_node_info internal_ip / node adı).`}</Empty>
+            ? <Empty icon="—" title={t('entityD.noMem', lang)} compact>{memQ.isError ? t('entityD.thanosErr', lang) : tf('entityD.noMatch', lang, { sel: nodeSel })}</Empty>
             : <MultiLineChart series={memSeries} height={180} unit="bytes" xRange={xRange} syncKey={`entity-node:${entity.id}`} />}
         </div>
       </div>
@@ -368,6 +375,7 @@ function NodePanel({ entity, clusterName, from, to, svc }: { entity: EntityRecor
 }
 
 function NamespacePanel({ entity, clusterName, from, to, svc }: { entity: EntityRecord; clusterName: string; from: number; to: number; svc?: EntityServicesResponse }) {
+  const lang = useLang();
   const { cFrom, cTo, clamped } = useMemo(() => clampThanosWindow(from, to), [from, to]);
   const nsQ = useQuery({
     queryKey: ['entity-ns-rows', clusterName],
@@ -381,15 +389,16 @@ function NamespacePanel({ entity, clusterName, from, to, svc }: { entity: Entity
         {/* v0.10.187 (F3) — satır yokken beş «—» kutusu yerine tek cümle */}
         {(row || nsQ.isPending) && (
           <>
-            <Stat label="pods (k8s)" value={row?.pods != null ? String(row.pods) : '…'} />
+            <Stat label={t('entityD.stat.podsK8s', lang)} value={row?.pods != null ? String(row.pods) : '…'} />
+            {/* i18n-exempt: CPU kısaltması */}
             <Stat label="CPU" value={row ? fmtCores(row.cpuCores) : '…'} />
-            <Stat label="Mem" value={row ? fmtBytes(row.memBytes) : '…'} />
-            <Stat label="restarts" value={row?.restarts != null ? String(row.restarts) : '…'} tone={row?.restarts ? 'warn' : undefined} />
-            <Stat label="failing pods" value={row?.failing != null ? String(row.failing) : '…'} tone={row?.failing ? 'err' : undefined} />
+            <Stat label={t('entityD.stat.mem', lang)} value={row ? fmtBytes(row.memBytes) : '…'} />
+            <Stat label={t('entityD.stat.restarts', lang)} value={row?.restarts != null ? String(row.restarts) : '…'} tone={row?.restarts ? 'warn' : undefined} />
+            <Stat label={t('entityD.stat.failing', lang)} value={row?.failing != null ? String(row.failing) : '…'} tone={row?.failing ? 'err' : undefined} />
           </>
         )}
-        {!row && !nsQ.isPending && <span className="field-hint">Thanos'ta bu namespace için seri yok{nsQ.isError ? ' (sorgu hatası)' : ''} — kapasite/kullanım kutuları ve trend bu yüzden boş.</span>}
-        {clamped && <span className="field-hint">trend: son {THANOS_MAX_WINDOW_LABEL}</span>}
+        {!row && !nsQ.isPending && <span className="field-hint">{tf('entityD.noNsSeries', lang, { err: nsQ.isError ? t('entityD.queryErr', lang) : '' })}</span>}
+        {clamped && <span className="field-hint">{tf('entityD.trendClamp', lang, { w: THANOS_MAX_WINDOW_LABEL })}</span>}
       </Row>
       <ImpactStrip id={entity.id} from={from} to={to} svc={svc} />
       <ThanosTrendPanel cluster={clusterName} namespace={entity.name} fromNs={cFrom} toNs={cTo} />

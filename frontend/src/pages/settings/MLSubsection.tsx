@@ -3,13 +3,16 @@
 // anahtar, temel eşikler. v0.10.2067: dedektör başına "Problem'e terfi"
 // anahtarı kalktı — Problem'i yalnız anomali grubu açar. Hepsi varsayılan KAPALI. Blob bir sonraki tikte okunur (restart yok);
 // PUT audit'e eski/yeni değerle düşer (sunucu).
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/shadcn/button';
 import { Field, CheckboxField, SelectField } from '@/components/coremetry/Field';
 import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
-import type { MLConfig, MLGatesMode, MLQuality, MLMetricSource } from '@/lib/types';
+import type { MLConfig, MLGatesMode, MLQuality, MLMetricSource, MLPrecisionMode, MLPrecisionView } from '@/lib/types';
+import { ConfirmCtx } from '@/components/coremetry/Confirm/context';
+import { MLPrecisionShadowSettings, PrecisionBadge, PrecisionOnConfirmBody } from './MLPrecisionShadowSettings';
+import { precisionOnTransition } from '@/components/coremetry/anomalies/mlPrecisionShadow';
 import { FlashBox, humanize } from './shared';
 import { MLBaselineSections } from './MLBaselineSections';
 import { MLRecommendedCard } from './MLRecommendedCard';
@@ -69,18 +72,31 @@ export function MLSubsection() {
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   // v0.10.2019 — metrik ailesi kaynağı (salt-okunur; ML lideri saatte bir seçer).
   const [sources, setSources] = useState<Record<string, MLMetricSource>>({});
+  // v0.10.2486 — gölge kuralı durumu (karne zarfı) + kayıtlı kip (on geçişi onay ister).
+  const [pview, setPview] = useState<MLPrecisionView | undefined>(undefined);
+  const [savedMode, setSavedMode] = useState<MLPrecisionMode | undefined>(undefined);
+  // Kapı yoksa (yalın test ağacı) on geçişi onaysız YAPILMAZ: askConfirm null → kayıt reddedilir.
+  const askConfirm = useContext(ConfirmCtx);
 
   useEffect(() => {
-    api.getMl().then(setCfg).catch(err => setFlash({ kind: 'err', text: humanize(err) }));
+    api.getMl().then(c => { setCfg(c); setSavedMode(c.precisionShadow?.mode); }).catch(err => setFlash({ kind: 'err', text: humanize(err) }));
     // tek seferlik okuma (karne ucu, 60 sn sunucu önbelleği); okunamazsa satır "henüz ölçülmedi" der.
-    api.mlScorecard().then(sc => setSources(sc?.tick?.metricSources ?? {})).catch(() => undefined);
+    api.mlScorecard().then(sc => { setSources(sc?.tick?.metricSources ?? {}); setPview(sc?.precisionShadow); }).catch(() => undefined);
   }, []);
 
   const save = async () => {
     if (!cfg) return;
+    // v0.10.2486 — gölge kuralını on'a almak açık onay ister: düşerdi listesi + kesilecek gerçek Problem.
+    const goingOn = precisionOnTransition(savedMode, cfg.precisionShadow?.mode);
+    if (goingOn && !(askConfirm && await askConfirm({
+      title: 'Otomatik gölge kuralı uygulansın mı?', confirmLabel: 'Kuralı on kipine al', danger: true,
+      body: <PrecisionOnConfirmBody view={pview} labelOf={mlDetectorLabel} />,
+    }))) return;
     setBusy(true); setFlash(null);
     try {
-      setCfg(await api.putMl(cfg));
+      const saved = await api.putMl(cfg, { confirmPrecisionOn: goingOn });
+      setCfg(saved);
+      setSavedMode(saved.precisionShadow?.mode);
       setFlash({ kind: 'ok', text: 'Kaydedildi — bir sonraki ML tikinde geçerli, restart gerekmez.' });
     } catch (err) {
       setFlash({ kind: 'err', text: humanize(err) });
@@ -146,6 +162,9 @@ export function MLSubsection() {
             <option value="shadow">shadow — yalnız kaydet</option>
             <option value="off">off — değerlendirme</option>
           </SelectField>
+          {/* v0.10.2486 — precision B.2: otomatik gölge kuralı; alan yok = shadow (yalnız rapor). */}
+          <MLPrecisionShadowSettings cfg={cfg} setCfg={setCfg} view={pview} labelOf={mlDetectorLabel}
+            detectors={[...ML_LOG_DETECTORS, ...ML_TRACE_DETECTORS, ...ML_METRIC_DETECTORS].map(d => d.id)} />
 
           <p className={NOTE}>Anahtar dedektörü açar; dedektör anomali kaydeder, Problem açmaz.</p>
           {([['Log dedektörleri', ML_LOG_DETECTORS], ['Trace dedektörleri', ML_TRACE_DETECTORS], ['Metrik aileleri', ML_METRIC_DETECTORS]] as const).map(([title, list]) => (<div key={title}>
@@ -154,7 +173,7 @@ export function MLSubsection() {
             {list.map(d => (
               <CheckboxField key={d.id} checked={cfg.detectors[d.id] === true} disabled={!cfg.enabled}
                 onCheckedChange={v => setCfg({ ...cfg, detectors: { ...cfg.detectors, [d.id]: v } })}
-                label={d.label} hint={d.id.startsWith('metric_') ? `${d.hint} · ${metricSourceLabel(sources[d.id], cfg.enabled && cfg.detectors[d.id] === true)}` : d.hint} />
+                label={<>{d.label}<PrecisionBadge view={pview} detector={d.id} /></>} hint={d.id.startsWith('metric_') ? `${d.hint} · ${metricSourceLabel(sources[d.id], cfg.enabled && cfg.detectors[d.id] === true)}` : d.hint} />
             ))}
           </div>
           </div>))}

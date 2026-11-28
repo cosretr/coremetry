@@ -15,7 +15,8 @@ export function resolveAnomalyView(raw: string | null, isAdmin: boolean): Anomal
 export const ANOMALY_VIEWS = ['', 'platform', 'load', 'held'] as const;
 
 // v0.10.2476: invalid_record — doğrulayıcıdan kalan kayıt (sunucu heldGateInvalid).
-const HELD_GATES = ['min_volume', 'min_abs_diff', 'visible_deviation', 'invalid_record'];
+// v0.10.2486: detector_shadow — precision kuralının on kipinde gölgedeki dedektör (sunucu heldGateDetShadow).
+const HELD_GATES = ['min_volume', 'min_abs_diff', 'visible_deviation', 'invalid_record', 'detector_shadow'];
 const heldNum = (v: number, lang: Lang) => v.toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US', { maximumFractionDigits: 1 });
 
 /** heldReasonText — SAF (v0.10.2473): kalan gürültü kapıları → "Elenme nedeni"

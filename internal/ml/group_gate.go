@@ -69,6 +69,11 @@ type GroupGateInput struct {
 	// ns, son 7 gün + 1 sa). nil = kural kapalı (ml.lagDailyPattern) ya da
 	// okunamadı: v0.10.2396 önceliği aynen.
 	LagHistory map[string][]int64
+	// Demoted — v0.10.2486 (precision programı B.2, precision_shadow.go):
+	// otomatik gölge kuralının `on` kipinde gölgedeki dedektörleri. nil =
+	// kural uygulanmıyor (varsayılan shadow kipi). Doluyken bu dedektörün
+	// üyesi hiçbir kolda sayılmaz (groupExcluded / problemCandidate yanında).
+	Demoted map[string]bool
 }
 
 // GroupDecision — grup terfi kararı (gölge kaydı; canlıda Live/ProblemID dolu).
@@ -160,7 +165,7 @@ func DecideGroupPromotion(g MLGroup, members []chstore.MLEvent, in GroupGateInpu
 	dets, sigs := map[string]bool{}, map[string]bool{}
 	peak, kept, cut, open := 1.0, 0, 0, 0
 	for _, e := range members {
-		if !inGroup[e.ID] || groupExcluded(e) || !problemCandidate(e, in.Published) {
+		if !inGroup[e.ID] || groupExcluded(e) || !problemCandidate(e, in.Published) || in.Demoted[e.Detector] {
 			continue
 		}
 		if groupMemberOpen(e, in.Open) {
@@ -305,6 +310,7 @@ func singleSignalShadow(members []chstore.MLEvent, inGroup map[string]bool, in G
 const (
 	SingleUnmetExcluded     = "excluded"      // grup kapısının hiçbir kolunda sayılmaz (groupExcluded)
 	SingleUnmetHeld         = "held"          // gürültü kapısında tutuldu (problemCandidate)
+	SingleUnmetDemoted      = "demoted"       // v0.10.2486: dedektör gölgede (precision kuralı, on kipi)
 	SingleUnmetClosed       = "closed"        // koşusu kapalı
 	SingleUnmetBatch        = "batch"         // batch kuralı (yalnız yük ölçüsü)
 	SingleUnmetNotWorsening = "not_worsening" // kötüleşme yönünde değil (singleWorsening)
@@ -338,6 +344,8 @@ func singleArmCheck(e chstore.MLEvent, in GroupGateInput, now time.Time) singleA
 		return singleArm{Unmet: SingleUnmetExcluded}
 	case !problemCandidate(e, in.Published):
 		return singleArm{Unmet: SingleUnmetHeld}
+	case in.Demoted[e.Detector]:
+		return singleArm{Unmet: SingleUnmetDemoted}
 	case !groupMemberOpen(e, in.Open):
 		return singleArm{Unmet: SingleUnmetClosed}
 	case !batchKeep(e, in.IsBatch, in.LoadParts):

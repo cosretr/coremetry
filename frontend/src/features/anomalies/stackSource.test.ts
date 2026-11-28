@@ -75,7 +75,7 @@ describe('ProblemDetail kablolaması (v0.10.1048)', () => {
   it('ref eki mevcut alt yazının sonunda; codeSourceRef üzerinden', () => {
     expect(src).toContain('const linkRef = frameLinksRef(framed);');
     // v0.10.2287 — "N satır" katalogda (exc.stack.lines); ek yine alt yazının sonunda.
-    expect(src).toContain("<span className=\"ov-sub\">representative sample{stackLines.length > 0 ? ` · ${tf('exc.stack.lines', lang, { n: stackLines.length })}` : ''}{linkRef}</span>");
+    expect(src).toContain("<span className=\"ov-sub\">{tl('probD.stack.sub', lang)}{stackLines.length > 0 ? ` · ${tf('exc.stack.lines', lang, { n: stackLines.length })}` : ''}{linkRef}</span>");
     const helper = readFileSync(resolve(__dirname, 'stackSource.ts'), 'utf8');
     expect(helper).toContain("import { codeSourceRef } from '@/components/codeSourceRef';");
     expect(helper).toContain('return codeSourceRef({ version: r.revision?.verified ? r.revision.version : undefined, branch: r.branch });');

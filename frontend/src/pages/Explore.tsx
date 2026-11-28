@@ -65,6 +65,7 @@ import { PageShell } from '@/components/coremetry/PageShell';
 import { metricPanelSubject, useMetricPanelAsk } from '@/components/ai/metricPanelAsk';
 import { usePublishPageOverlay } from '@/lib/pageContextOverlay';
 import { exploreQueryAsk, exploreSelectedSeries } from './explore/panelAsk';
+import { useT } from '@/lib/i18n';
 
 // Explore (explore-v2 Phase 2) — the metric result mode is now the
 // multi-query builder: up to four queries A–D (span signals or catalogue
@@ -90,6 +91,7 @@ function ExploreInner({ onSelfWrite }: {
   // tetiklerdi.
   onSelfWrite: (search: string) => void;
 }) {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -662,10 +664,10 @@ function ExploreInner({ onSelfWrite }: {
   const sourceTargetFor = useCallback((letter: string, pairs: PivotPair[]): SourceTarget => {
     const q = builder.queries.find(x => x.letter === letter);
     if (!q) {
-      return { ok: false, why: 'Formül satırı birden çok sorgunun aritmetiği — tek bir ham kaynağı yok' };
+      return { ok: false, why: tn('exploreP.formulaNoSource') };
     }
     return exploreSourceHref(q, pairs, range);
-  }, [builder.queries, range]);
+  }, [builder.queries, range, tn]);
 
   const openSourceFromRow = useCallback((letter: string, pairs: PivotPair[]) => {
     const t = sourceTargetFor(letter, pairs);
@@ -755,7 +757,7 @@ function ExploreInner({ onSelfWrite }: {
 
   return (
     <>
-      <Topbar title="Explore" range={range} onRangeChange={setRange} envApplies />
+      <Topbar title={tn('nav.explore')} range={range} onRangeChange={setRange} envApplies />
       <PageShell>
         {/* v0.9.942 (B2) — GÖRÜNÜR KAPSAM. Enjekte edilen çipler bilerek
             çip satırında değil (silinebilir olsalardı picker'la yalana
@@ -793,27 +795,27 @@ function ExploreInner({ onSelfWrite }: {
 
           {/* SHOW zone — result mode + (metric mode) viz rail + step */}
           <div style={ZONE}>
-            <span style={ZONE_LABEL}>Show</span>
-            <SegmentedControl aria-label="Sonuç kipi" value={resultMode} onChange={switchResultMode} options={[
-              { value: 'traces', label: '⋮ Traces' },
-              { value: 'metric', label: '∿ Metric' },
-              { value: 'repeats', label: '⟳ Repeats', title: 'Find traces where the same span shape repeats N+ times (N+1 / chatty-RPC detector)' },
+            <span style={ZONE_LABEL}>{tn('exploreP.zone.show')}</span>
+            <SegmentedControl aria-label={tn('exploreP.resultMode')} value={resultMode} onChange={switchResultMode} options={[
+              { value: 'traces', label: tn('exploreP.mode.traces') },
+              { value: 'metric', label: tn('exploreP.mode.metric') },
+              { value: 'repeats', label: tn('exploreP.mode.repeats'), title: tn('exploreP.mode.repeatsTip') },
             ]} />
             {resultMode === 'metric' && (
               <>
                 <span style={VDIV} />
                 <VizRail value={builder.viz} onChange={v => setBuilder(b => ({ ...b, viz: v }))}
                   disabled={vizDisabledFor(builder.queries.map(queryUnit))} />
-                <span style={{ color: 'var(--text2)', fontSize: 12, marginLeft: 4 }}>Step:</span>
+                <span style={{ color: 'var(--text2)', fontSize: 12, marginLeft: 4 }}>{tn('exploreP.step')}</span>
                 <select value={builder.step}
                   onChange={e => setBuilder(b => ({ ...b, step: Number(e.target.value) }))}
-                  title="Bucket genişliği — formül hizası için tüm sorgularda ortak">
+                  title={tn('exploreP.stepTip')}>
                   {STEP_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
                 </select>
-                <span style={{ color: 'var(--text2)', fontSize: 12, marginLeft: 4 }}>Top:</span>
+                <span style={{ color: 'var(--text2)', fontSize: 12, marginLeft: 4 }}>{tn('exploreP.top')}</span>
                 <select value={builder.topN ?? PANEL_SERIES_CAP}
                   onChange={e => setBuilder(b => ({ ...b, topN: Number(e.target.value) }))}
-                  title="En çok alanı kaplayan ilk N seriyi göster (Uptrace top10) — kalan seriler '+N more' olarak gizlenir">
+                  title={tn('exploreP.topTip')}>
                   {TOP_N_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
                 {/* v0.8.418 (DE3) — log10 y-axis. Dynatrace Data-Explorer
@@ -833,7 +835,8 @@ function ExploreInner({ onSelfWrite }: {
                 {(builder.viz === 'line' || builder.viz === 'area' || builder.viz === 'bars') && (
                   <Chip active={!!builder.logY} tone="accent" style={{ marginLeft: 4 }}
                     onClick={() => setBuilder(b => ({ ...b, logY: !b.logY || undefined }))}
-                    title="Logaritmik y-ekseni — on/off. Kademeler arası (ör. 5ms p50 ile 3s p99) serileri aynı panelde okunur kılar.">
+                    title={tn('exploreP.logYTip')}>
+                    {/* i18n-exempt: axis toggle label (log y) */}
                     log y
                   </Chip>
                 )}
@@ -843,13 +846,12 @@ function ExploreInner({ onSelfWrite }: {
                     özel (heatmap'in hayaleti olmaz — heatmap'te karo başına
                     iki dönem üst üste binmez, mod seçilince şerit çıkmaz). */}
                 {builder.viz !== 'heatmap' && (<>
-                  <span style={{ color: 'var(--text2)', fontSize: 12, marginLeft: 4 }}>Karşılaştır:</span>
-                  <SegmentedControl aria-label="Karşılaştırma" value={builder.cmp ?? 'off'}
+                  <span style={{ color: 'var(--text2)', fontSize: 12, marginLeft: 4 }}>{tn('exploreP.cmp.label')}</span>
+                  <SegmentedControl aria-label={tn('exploreP.cmp.aria')} value={builder.cmp ?? 'off'}
                     onChange={v => setBuilder(b => ({ ...b, cmp: v === 'off' ? undefined : v }))} options={[
-                      { value: 'off' as const, label: 'Kapalı', title: 'Karşılaştırma kapalı — tek sorgu turu (varsayılan)' },
-                      ...EXPLORE_COMPARE.map(m => ({ value: m, label: m === 'prev' ? 'Önceki' : m,
-                        title: `${compareLabel(m)} ile karşılaştır — kesikli soluk hayalet çizgiler + Δ %. `
-                          + 'Sorgu maliyetini İKİYE KATLAR: her sorgu bir de kaydırılmış pencerede koşar.' })),
+                      { value: 'off' as const, label: tn('exploreP.cmp.off'), title: tn('exploreP.cmp.offTip') },
+                      ...EXPLORE_COMPARE.map(m => ({ value: m, label: m === 'prev' ? tn('exploreP.cmp.prev') : m,
+                        title: tn('exploreP.cmp.tip').replace('{label}', compareLabel(m)) })),
                     ]} />
                 </>)}
               </>
@@ -861,7 +863,7 @@ function ExploreInner({ onSelfWrite }: {
               filter set to query A + the page range. */}
           {resultMode === 'metric' && (
             <div style={ZONE}>
-              <span style={ZONE_LABEL}>Ask</span>
+              <span style={ZONE_LABEL}>{tn('exploreP.zone.ask')}</span>
               <div style={{ flex: 1, minWidth: 240 }}>
                 <NLQueryBox
                   onApply={(nlFilters, preset) => {
@@ -888,15 +890,15 @@ function ExploreInner({ onSelfWrite }: {
                   onRemove={() => removeQuery(i)} />
               ))}
               <div style={ZONE}>
-                <span style={ZONE_LABEL}>Formula</span>
+                <span style={ZONE_LABEL}>{tn('exploreP.zone.formula')}</span>
                 <FormulaRow value={builder.formula}
                   onChange={f => setBuilder(b => ({ ...b, formula: f }))}
                   letters={builder.queries.filter(produces).map(q => q.letter)} />
                 <span style={VDIV} />
                 <Button variant="secondary" onClick={addQuery}
                   disabled={builder.queries.length >= MAX_QUERIES}
-                  title={builder.queries.length >= MAX_QUERIES ? 'En fazla 4 sorgu (A–D)' : 'Yeni sorgu ekle'}>
-                  + Sorgu
+                  title={builder.queries.length >= MAX_QUERIES ? tn('exploreP.addQuery.max') : tn('exploreP.addQuery.tip')}>
+                  {tn('exploreP.addQuery')}
                 </Button>
               </div>
             </>
@@ -905,10 +907,10 @@ function ExploreInner({ onSelfWrite }: {
           {/* FILTER zone — traces/repeats console (pre-v2 shape) */}
           {resultMode !== 'metric' && (
             <div style={{ ...ZONE, alignItems: 'flex-start' }}>
-              <span style={{ ...ZONE_LABEL, marginTop: 5 }}>Filter</span>
+              <span style={{ ...ZONE_LABEL, marginTop: 5 }}>{tn('exploreP.zone.filter')}</span>
               <div style={{ marginTop: 1 }}>
-                <SegmentedControl aria-label="Filtre kipi" value={mode} onChange={setMode}
-                  options={[{ value: 'builder', label: 'Builder' }, { value: 'advanced', label: 'Advanced' }]} />
+                <SegmentedControl aria-label={tn('exploreP.filterMode')} value={mode} onChange={setMode}
+                  options={[{ value: 'builder', label: tn('exploreP.filterMode.builder') }, { value: 'advanced', label: tn('exploreP.filterMode.advanced') }]} />
               </div>
               <div style={{ flex: 1, minWidth: 240 }}>
                 {mode === 'builder' && (
@@ -942,9 +944,9 @@ name ~ checkout`}
                       rows={Math.max(4, dsl.split('\n').length + 1)} />
                     {queryError && <div className="trp-error" style={{ marginTop: 6 }}>{queryError}</div>}
                     <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text3)' }}
-                      title="One condition per line · operators: = != > >= < <= ~ !~ in [a,b] exists · prefix resource./span. to scope · duration accepts 500ms, 1.5s, 2m">
-                      Conditions are AND-joined · prefix with <code>resource.</code> or <code>span.</code> to scope ·
-                      <code>duration</code> accepts <code>500ms</code>, <code>1.5s</code>, <code>2m</code>
+                      title={tn('exploreP.dsl.tip')}>
+                      {tn('exploreP.dsl.prefix')} <code>resource.</code> {tn('exploreP.dsl.or')} <code>span.</code> {tn('exploreP.dsl.scope')}{/* i18n-exempt: DSL tokens in <code> */}
+                      <code>duration</code> {tn('exploreP.dsl.accepts')} <code>500ms</code>, <code>1.5s</code>, <code>2m</code>
                     </div>
                   </div>
                 )}
@@ -955,10 +957,10 @@ name ~ checkout`}
           {/* RESULT zone — traces mode: limit + "showing N of M". */}
           {resultMode === 'traces' && (
             <div style={ZONE}>
-              <span style={ZONE_LABEL}>Result</span>
-              <span style={{ color: 'var(--text2)', fontSize: 12 }}>Limit:</span>
+              <span style={ZONE_LABEL}>{tn('exploreP.zone.result')}</span>
+              <span style={{ color: 'var(--text2)', fontSize: 12 }}>{tn('exploreP.limit')}</span>
               <select value={traceLimit} onChange={e => setTraceLimit(Number(e.target.value))}>
-                {[20, 50, 100, 200, 500, 1000, 2000, 5000].map(n => <option key={n} value={n}>{n} traces</option>)}
+                {[20, 50, 100, 200, 500, 1000, 2000, 5000].map(n => <option key={n} value={n}>{tn('exploreP.limitOpt').replace('{n}', String(n))}</option>)}
               </select>
               {traces && traceTotal !== undefined && traceTotal > 0 && (
                 <span style={{
@@ -966,9 +968,9 @@ name ~ checkout`}
                     ? 'var(--err)' : 'var(--text2)',
                   fontSize: 12, fontWeight: 600,
                 }}>
-                  Showing {fmtNum(traces.length)} of {fmtNum(traceTotal)}
+                  {tn('exploreP.showingOf').replace('{n}', fmtNum(traces.length)).replace('{total}', fmtNum(traceTotal))}
                   {traces.length >= traceLimit && traceTotal > traces.length && (
-                    <> — raise limit to see more</>
+                    <>{tn('exploreP.raiseLimit')}</>
                   )}
                 </span>
               )}
@@ -981,16 +983,16 @@ name ~ checkout`}
                   color: traceHasMore ? 'var(--err)' : 'var(--text2)',
                   fontSize: 12, fontWeight: 600,
                 }}>
-                  Showing {fmtNum(traces.length)}{traceHasMore ? '+' : ''}
+                  {tn('exploreP.showing').replace('{n}', `${fmtNum(traces.length)}${traceHasMore ? '+' : ''}`)}
                   {' · '}
                   <a href="#" onClick={e => { e.preventDefault(); setShowTotal(true); }}
-                    title="Run an exact count(DISTINCT trace_id) over the window — can be slow at scale">
-                    count total
+                    title={tn('exploreP.countTip')}>
+                    {tn('exploreP.count')}
                   </a>
                 </span>
               )}
               <span style={{ color: 'var(--text3)', fontSize: 11, marginLeft: 'auto' }}>
-                Sorted by start time desc
+                {tn('exploreP.sorted')}
               </span>
             </div>
           )}
@@ -998,7 +1000,7 @@ name ~ checkout`}
           {/* REPEATS zone — presets + shape key + Min repeats. */}
           {resultMode === 'repeats' && (
             <div style={ZONE}>
-              <span style={ZONE_LABEL}>Repeats</span>
+              <span style={ZONE_LABEL}>{tn('exploreP.zone.repeats')}</span>
               {REPEAT_PRESETS.map(p => {
                 const active = p.minRepeats === repeatMin
                   && p.groupBy.length === repeatGroupBy.length
@@ -1025,9 +1027,9 @@ name ~ checkout`}
                 );
               })}
               <span style={VDIV} />
-              <span style={{ color: 'var(--text2)', fontSize: 12 }}>Shape:</span>
+              <span style={{ color: 'var(--text2)', fontSize: 12 }}>{tn('exploreP.shape')}</span>
               <SplitByPicker value={repeatGroupBy} onChange={setRepeatGroupBy} />
-              <span style={{ color: 'var(--text2)', fontSize: 12 }}>Min repeats:</span>
+              <span style={{ color: 'var(--text2)', fontSize: 12 }}>{tn('exploreP.minRepeats')}</span>
               <select value={repeatMin} onChange={e => setRepeatMin(Number(e.target.value))}>
                 {[2, 3, 5, 10, 20, 50, 100].map(n => <option key={n} value={n}>≥ {n}</option>)}
               </select>
@@ -1049,13 +1051,13 @@ name ~ checkout`}
             {builderErrors.length > 0 && (
               <div className="trp-error" style={{ marginBottom: 10 }}>
                 {builderErrors.map(([letter, message]) => (
-                  <div key={letter}>Sorgu {letter} hata verdi: {message}</div>
+                  <div key={letter}>{tn('exploreP.queryFailed').replace('{letter}', letter).replace('{msg}', message)}</div>
                 ))}
               </div>
             )}
             {!anyProduces && (
-              <Empty icon="◎" title="Aktif sorgu yok">
-                Bir sorguyu aç (harf rozetine tıkla) ya da metric-source sorgusuna bir metrik seç.
+              <Empty icon="◎" title={tn('exploreP.noActive')}>
+                {tn('exploreP.noActiveBody')}
               </Empty>
             )}
             {anyProduces && (
@@ -1065,13 +1067,13 @@ name ~ checkout`}
                     display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8,
                     fontSize: 12, color: 'var(--text2)',
                   }}>
-                    <span>🔍 Zoom aktif — tüm paneller senkron</span>
+                    <span>{tn('exploreP.zoom.active')}</span>
                     <Button variant="secondary" size="sm"
-                      onClick={() => { zoomStackRef.current = []; setZoomWindow(null); }}>Sıfırla</Button>
+                      onClick={() => { zoomStackRef.current = []; setZoomWindow(null); }}>{tn('exploreP.zoom.reset')}</Button>
                     <Button variant="secondary" size="sm"
                       onClick={fetchZoomWindow}
-                      title="Zoom penceresini sayfa aralığı yap — backend daha ince bucket'larla yeniden sorgular">
-                      Bu pencereyi getir →
+                      title={tn('exploreP.zoom.fetchTip')}>
+                      {tn('exploreP.zoom.fetch')}
                     </Button>
                   </div>
                 )}
@@ -1137,7 +1139,7 @@ name ~ checkout`}
           || (resultMode === 'repeats' && repeats !== undefined)
         ) && (
           <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6 }}>
-            yenileniyor… (gösterilen sonuç bir önceki sorgudan)
+            {tn('exploreP.refreshing')}
           </div>
         )}
 
@@ -1146,15 +1148,15 @@ name ~ checkout`}
           <>
             {heatmap === undefined && <Spinner />}
             {heatmap === null && (
-              <Empty icon="◎" title="No data for this query">
-                {heatmapNote ?? 'Try a wider time range or fewer filters.'}
+              <Empty icon="◎" title={tn('exploreP.noData')}>
+                {heatmapNote ?? tn('exploreP.noDataHint')}
               </Empty>
             )}
             {heatmap && heatmap.maxCount === 0 && (
               // v0.9.1202 — metrik-histogram yolunda sunucunun "neden boş"
               // notu varsa varsayılan cümlenin yerine geçer (VM: "_bucket
               // serisi bulunamadı — histogram olmayabilir").
-              <Empty icon="◎" title={heatmapNote ? 'Bu pencerede örnek yok' : 'No spans matched in this window'}>
+              <Empty icon="◎" title={heatmapNote ? tn('exploreP.noSamples') : tn('exploreP.noSpans')}>
                 {heatmapNote ?? undefined}
               </Empty>
             )}
@@ -1173,9 +1175,9 @@ name ~ checkout`}
                 borderRadius: 8, padding: 14,
               }}>
                 <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8 }}>
-                  {isMetricHeat ? 'Histogram density' : 'Latency density'} · sorgu A filtreleri · {heatmap.times.length} time buckets ×
-                  {' '}{heatmap.durationBins.length} {isMetricHeat ? 'bucket bins' : 'log-scale latency bins'}
-                  · peak cell {heatmap.maxCount.toLocaleString()} {noun}
+                  {tn(isMetricHeat ? 'exploreP.heat.histDensity' : 'exploreP.heat.latDensity')}{tn('exploreP.heat.timeBuckets').replace('{n}', String(heatmap.times.length))}
+                  {' '}{heatmap.durationBins.length} {tn(isMetricHeat ? 'exploreP.heat.bucketBins' : 'exploreP.heat.latBins')}
+                  {tn('exploreP.heat.peak')} {heatmap.maxCount.toLocaleString()} {noun}
                 </div>
                 <LatencyHeatmap data={heatmap}
                   onCellClick={isMetricHeat ? undefined : (cell) => setCellExemplar({
@@ -1191,11 +1193,11 @@ name ~ checkout`}
                   display: 'flex', alignItems: 'center', gap: 10,
                   fontSize: 10, color: 'var(--text3)', marginTop: 6,
                 }}>
-                  <span>Tek hücre = örnek trace · sürükle (kutu seç) = BubbleUp</span>
+                  <span>{tn('exploreP.heat.hint')}</span>
                   {/* v0.9.1113 — Honeycomb çekirdek döngüsünün tek-tık kapısı. */}
                   <Button variant="ghost" size="sm" onClick={() => setErrDiff(v => !v)}
-                    title="Bu penceredeki hatalı span'ları aynı sorgunun tamamıyla kıyasla — hangi attribute'lar hatalarda farklı?">
-                    Hatalarda ne farklı?
+                    title={tn('exploreP.errDiff.tip')}>
+                    {tn('exploreP.errDiff.btn')}
                   </Button>
                 </div>
                 )}
@@ -1209,9 +1211,9 @@ name ~ checkout`}
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         fontSize: 11, color: 'var(--text2)',
                       }}>
-                        <span>Hata diff'i · status=error vs sorgunun tamamı · tüm pencere</span>
+                        <span>{tn('exploreP.errDiff.head')}</span>
                         <Button variant="ghost" size="sm" onClick={() => setErrDiff(false)}
-                          title="Hata diff'ini kapat">✕</Button>
+                          title={tn('exploreP.errDiff.close')}>✕</Button>
                       </div>
                       <BubbleUpPanel
                         baseline={baseline}
@@ -1252,11 +1254,11 @@ name ~ checkout`}
                         fontSize: 11, color: 'var(--text2)',
                       }}>
                         <span>
-                          Seçim · {fmtNum(boxSel.count)} span · {tFmt(boxSel.timeFromNs)}–{tFmt(boxSel.timeToNs)}
+                          {tn('exploreP.sel.head').replace('{n}', fmtNum(boxSel.count))} {tFmt(boxSel.timeFromNs)}–{tFmt(boxSel.timeToNs)}
                           {' '}· {boxSel.lowDurMs >= 1 ? Math.round(boxSel.lowDurMs) : boxSel.lowDurMs.toFixed(1)}–{Math.round(boxSel.highDurMs)} ms
                         </span>
                         <Button variant="ghost" size="sm" onClick={() => setBoxSel(null)}
-                          title="Seçimi kapat">✕</Button>
+                          title={tn('exploreP.sel.close')}>✕</Button>
                       </div>
                       <BubbleUpPanel
                         baseline={baseline}

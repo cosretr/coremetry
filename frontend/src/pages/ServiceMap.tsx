@@ -21,6 +21,7 @@ import { encodeRange } from '@/lib/urlState';
 import type { ServiceMap } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { useT } from '@/lib/i18n';
 
 // Service map: global topology view + a focus mode that
 // narrows to a single service's 1-hop neighbourhood. The
@@ -56,6 +57,7 @@ const TOPO_URL_SPEC = {
   tcluster: strParam(),
 };
 export default function ServiceMapPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   // v0.10.1234 (paylaşılabilir URL, Faz 1-B) — samples / compare / topN /
   // cluster seçimleri URL'den türetilir (önce yerel state'ti; paylaşılan
@@ -281,7 +283,7 @@ export default function ServiceMapPage() {
 
   return (
     <>
-      <Topbar title="Service map" range={range} onRangeChange={setRange} />
+      <Topbar title={tn('nav.topology')} range={range} onRangeChange={setRange} />
       <PageShell>
         <div style={{
           display: 'flex', gap: 10, alignItems: 'center',

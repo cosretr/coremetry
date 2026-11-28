@@ -15,6 +15,7 @@ import type { Problem, ChangedService, ExceptionGroup } from '@/lib/types';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { RenderedMarkdown } from '@/components/Markdown';
 import { SubjectLink } from '../components/SubjectLink';
+import { useT } from '@/lib/i18n';
 import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 
 // Shift.tsx — /shift vardiya özeti (v0.9.1072, Faz 3.2; mockup
@@ -53,6 +54,7 @@ const EXC_COLS: ColumnDef<ExceptionGroup>[] = [
 ];
 
 export default function ShiftPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const [searchParams, setSearchParams] = useSearchParams();
   const w = normalizeShiftWindow(searchParams.get('w'));
   const setW = (next: string) => {
@@ -105,7 +107,7 @@ export default function ShiftPage() {
 
   return (
     <PageShell>
-      <Topbar title="Vardiya özeti" />
+      <Topbar title={tn('nav.shift')} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '10px 0 16px' }}>
         <SegmentedControl size="sm" aria-label="Vardiya penceresi" value={w} onChange={setW}
           options={SHIFT_WINDOWS.map(win => ({ value: win, label: `Son ${win}` }))} />

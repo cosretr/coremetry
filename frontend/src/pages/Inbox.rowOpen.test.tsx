@@ -372,7 +372,7 @@ describe('varsayılan yalnız Problem — gizli türler çipte görünür', () =
     act(() => { btn!.click(); });
     await settle();
     const txt = document.body.textContent ?? '';
-    expect(txt).toMatch(/Anomalies\D*970/);
-    expect(txt).toMatch(/HTTP errors\D*41/);
+    expect(txt).toMatch(/Sinyaller\D*970/);
+    expect(txt).toMatch(/HTTP hataları\D*41/);
   });
 });

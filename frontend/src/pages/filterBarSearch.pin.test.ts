@@ -32,7 +32,7 @@ function bar(src: string): string {
 // `<Button …>Search</Button>` açılış etiketi (tek primary).
 function searchTag(seg: string): string {
   // v0.10.1951 — Traces shadcn dilimi: ui `primary` ≡ shadcn `default` (dolu birincil).
-  const m = /<Button\b(?:=>|[^>])*?variant="(?:primary|default)"(?:=>|[^>])*?>Search<\/Button>/.exec(seg);
+  const m = /<Button\b(?:=>|[^>])*?variant="(?:primary|default)"(?:=>|[^>])*?>(?:Search|\{tl\('tracesP\.f\.search', lang\)\})<\/Button>/.exec(seg);
   expect(m, 'Search primary bulunamadı').not.toBeNull();
   return m![0];
 }
@@ -88,10 +88,10 @@ describe('v0.10.1332 — Traces', () => {
   it('filtre barı: Search md, ipucusuz, Root\'tan SONRA, boşluk + görünüm anahtarından ÖNCE', () => {
     const seg = bar(src);
     expect(searchTag(seg)).not.toMatch(/size="sm"/);
-    expect(seg).toMatch(/<span className="search-go">\s*<Button variant="(?:primary|default)"(?:=>|[^>])*?>Search<\/Button>\s*<\/span>/);
+    expect(seg).toMatch(/<span className="search-go">\s*<Button variant="(?:primary|default)"(?:=>|[^>])*?>\{tl\('tracesP\.f\.search', lang\)\}<\/Button>\s*<\/span>/);
     expect(src).not.toMatch(/<EnterHint/);
-    const iRoot = at(seg, '>Root</span>');
-    const iSearch = at(seg, '>Search</Button>');
+    const iRoot = at(seg, ">{tl('tracesP.f.root', lang)}</span>" /* v0.10.2486 — katalogda */);
+    const iSearch = at(seg, ">{tl('tracesP.f.search', lang)}</Button>");
     const iSpacer = at(seg, "<span style={{ marginLeft: 'auto' }} />");
     const iSeg = at(seg, "aria-label={tl('trc.viewAria', lang)}"); // v0.10.2314 — katalog anahtarı ('Trace görünümü')
     expect(iRoot).toBeLessThan(iSearch);
@@ -108,7 +108,7 @@ describe('v0.10.1332 — Traces', () => {
     expect(mounts).toEqual(['<SavedViewsBar page="traces" variant="compact" size="sm" />']);
     expect(src).not.toMatch(/<SavedViewsBar[^>]*\bright=/);
     const acts = src.slice(at(src, 'const pageActions = ('), at(src, '⬇ CSV'));
-    const order = ['<SavedViewsBar', '>Reset</Button>', '/api/traces/export.csv?'].map(n => at(acts, n));
+    const order = ['<SavedViewsBar', ">{tl('tracesP.reset', lang)}</Button>", '/api/traces/export.csv?'].map(n => at(acts, n));
     expect(order).toEqual([...order].sort((x, y) => x - y));
     expect((src.match(/\{pageActions\}/g) ?? []).length).toBe(3); // volume, latency, iskelet
     expect(src).toMatch(/options=\{STRIP_STATS\.map\(st => \(\{ value: st, label: st \}\)\)\} \/>\s*\{pageActions\}/);

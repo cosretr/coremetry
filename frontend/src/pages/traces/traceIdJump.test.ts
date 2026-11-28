@@ -69,7 +69,7 @@ describe('kablolama (Traces.tsx)', () => {
   });
   it('operasyon kutusu yazılanı search’e, seçileni op’a yazar ve id yer tutucusunu taşır', () => {
     expect(src).toMatch(/<OperationPicker service=\{draft\.service\} value=\{draft\.op \|\| draft\.search\}\s*onChange=\{v => setDraft\(\{ \.\.\.draft, search: v, op: '' \}\)\}/);
-    expect(src).toContain('placeholder="Operation, or an id (function_id / trace ID)…"');
+    expect(src).toContain("placeholder={tl('tracesP.f.op', lang)}"); // v0.10.2486 — katalogda (EN değeri aynen)
   });
   it('sarmalayıcı eski paramı iç sayfa monte olmadan, replace ile yönlendirir', () => {
     expect(src).toContain('const legacy = legacyTraceIdRedirect(search);');

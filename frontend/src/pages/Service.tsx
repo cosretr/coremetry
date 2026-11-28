@@ -92,6 +92,7 @@ function serviceHeadDot(errorRate: number): { cls: 'red' | 'amber' | 'green'; la
 
 function ServiceDetailInner() {
   'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const tr = useT(); // v0.10.1525 — "All statements" / "Tüm sorgular"
   const [searchParams, setSearchParams] = useSearchParams();
   // v0.10.717 (multi-cluster ilkesi) — Topbar Cluster kapsamı ve Details
@@ -488,8 +489,8 @@ function ServiceDetailInner() {
   if (!svc) {
     return (
       <>
-        <Topbar title="Service" range={range} onRangeChange={setRange} envApplies />
-        <PageShell><Empty icon="⚠" title="Missing service name" /></PageShell>
+        <Topbar title={tn('page.service')} range={range} onRangeChange={setRange} envApplies />
+        <PageShell><Empty icon="⚠" title={tn('svc.missing')} /></PageShell>
       </>
     );
   }
@@ -497,7 +498,7 @@ function ServiceDetailInner() {
 
   return (
     <>
-      <Topbar title={`Service · ${svc}`} range={range} onRangeChange={setRange} envApplies sampling="services" />
+      <Topbar title={`${tn('page.service')} · ${svc}`} range={range} onRangeChange={setRange} envApplies sampling="services" />
       <PageShell>
         {/* Service identity header (design handoff app.jsx .svc-head): big
             status dot + bare service name + runtime badge + health pill. */}
@@ -563,13 +564,13 @@ function ServiceDetailInner() {
               birleşim globals'ta `.btn-group.is-attached > a.sec`. */}
           {/* v0.10.1336 — data-tour çapaları (svc-crumbs / svc-pin / svc-nav): rehberli tur adım 3. */}
           <div className="svc-head__nav" data-tour="svc-nav">
-            <ButtonGroup attached aria-label="Bağımlılık ve sinyaller">
+            <ButtonGroup attached aria-label={tn('svc.drill.groupDeps')}>
               <DrillButton to="/service/backtrace" params={{ name: svc }} variant="subtle"
-                title="Inbound callers — service / pod / IP backtrace"
-                label="↩ Backtrace" />
+                title={tn('svc.drill.backtraceTip')}
+                label={`↩ ${tn('page.backtrace')}`} />
               <DrillButton to="/logs" params={{ service: svc }} range={range} carry={SERVICE_PIVOT_CARRY} variant="subtle"
-                title="Logs filtered to this service"
-                label="≡ Logs" />
+                title={tn('svc.drill.logsTip')}
+                label={`≡ ${tn('nav.logs')}`} />
               {/* v0.9.309 (brief N6d) — /endpoints had NO contextual way
                   in: the page was reachable only from the sidebar and the
                   command palette, so an incident investigation never
@@ -579,25 +580,29 @@ function ServiceDetailInner() {
                   rides every other pivot since v0.9.307: a link must ask
                   the question the screen it left was asking. */}
               <DrillButton to="/endpoints" params={{ service: svc }} range={range} carry={SERVICE_PIVOT_CARRY} variant="subtle"
-                title="Per-route RED for this service — calls, errors, P50/P90/P95/P99 and spread per endpoint"
-                label="⇄ Endpoints" />
+                title={tn('svc.drill.endpointsTip')}
+                label={`⇄ ${tn('nav.endpoints')}`} />
             </ButtonGroup>
-            <ButtonGroup attached aria-label="Sağlık">
-              <DrillButton to="/problems" params={{ service: svc }} variant="subtle"
-                title="Open problems for this service"
-                label={<>⚠ Problems{openProblems > 0 && <span className="badge b-err">{openProblems}</span>}</>} />
+            <ButtonGroup attached aria-label={tn('svc.drill.groupHealth')}>
+              {/* v0.10.2486 dilim 2 (audit §1.1 rota–etiket tersliği) — düğme "Problems"
+                  diyor, sayacı açık Problem'leri sayıyordu ama /problems'e (Hatalar
+                  sayfası) gidiyordu. Hedef artık sayacın saydığı yer: Problemler
+                  (/inbox?service=). Hatalar menüden ve dikkat şeridinden açılır. */}
+              <DrillButton to="/inbox" params={{ service: svc }} variant="subtle"
+                title={tn('svc.drill.problemsTip')}
+                label={<>⚠ {tn('nav.inbox')}{openProblems > 0 && <span className="badge b-err">{openProblems}</span>}</>} />
               <DrillButton to="/inbox" params={{ tab: 'signals', service: svc }} variant="subtle"
-                title="Anomaly events (Problems › Signals)"
-                label="∿ Signals" />
+                title={tn('svc.drill.signalsTip')}
+                label={`∿ ${tn('inbox.tab.signals')}`} />
             </ButtonGroup>
             {/* v0.10.2039 — servis sağlık kontrolü: "Sağlık" grubunun sağında AYRI
                 düğme (gezinme değil, eylem: çekmecede salt-okunur kontrol turu
                 koşar; ?hc=1). İstek yalnız tıklayınca. */}
             <ServiceHealthcheckButton service={svc} env={env} />
-            <ButtonGroup attached aria-label="Traces">
+            <ButtonGroup attached aria-label={tn('nav.traces')}>
               <DrillButton to="/traces" params={{ service: svc }} range={range} carry={SERVICE_PIVOT_CARRY} variant="subtle"
-                title="Raw traces filtered to this service"
-                label="⋮ Traces" />
+                title={tn('svc.drill.tracesTip')}
+                label={`⋮ ${tn('nav.traces')}`} />
             </ButtonGroup>
           </div>
         </div>
@@ -861,23 +866,25 @@ function TabStrip({ tab, onChange, opCount }: {
   opCount: number;
 }) {
   'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
+  // v0.10.2486 dilim 2 — sekme adları katalogdan (tab.*); sıra değişmedi.
+  const tn = useT();
   const items: { key: ServiceTab; label: string; hint?: string }[] = [
-    { key: 'overview',   label: 'Overview' },
-    { key: 'operations', label: 'Operations', hint: opCount > 0 ? `${opCount}` : undefined },
-    { key: 'details',    label: 'Metrics' }, // v0.10.2436 — Elastic APM adı; URL anahtarı `details`
-    { key: 'infra',      label: 'Infrastructure' },
-    { key: 'gitops',     label: 'GitOps' }, // v0.10.981
-    { key: 'http',       label: 'HTTP/GRPC' }, // v0.10.1244; v0.10.1566 ad HTTP/GRPC, gRPC eki yok (operatör: "başlıkta +grpc demesine gerek yok")
-    { key: 'messaging',  label: 'Messaging' }, // v0.10.1536 — Kafka istemci metrikleri (Grafana panosu paritesi)
-    { key: 'topology',   label: 'Topology' },
-    { key: 'logs',       label: 'Logs' },
+    { key: 'overview',   label: tn('tab.overview') },
+    { key: 'operations', label: tn('tab.operations'), hint: opCount > 0 ? `${opCount}` : undefined },
+    { key: 'details',    label: tn('tab.metrics') }, // v0.10.2436 — Elastic APM adı; URL anahtarı `details`
+    { key: 'infra',      label: tn('tab.infra') },
+    { key: 'gitops',     label: tn('tab.gitops') }, // v0.10.981
+    { key: 'http',       label: tn('tab.http') }, // v0.10.1244; v0.10.1566 ad HTTP/GRPC, gRPC eki yok (operatör: "başlıkta +grpc demesine gerek yok")
+    { key: 'messaging',  label: tn('tab.messaging') }, // v0.10.1536 — Kafka istemci metrikleri (Grafana panosu paritesi)
+    { key: 'topology',   label: tn('tab.topology') },
+    { key: 'logs',       label: tn('tab.logs') },
   ];
   // The house `.tab-strip` set — same active colour, underline weight and
   // padding as Settings, Anomalies, Endpoints and the eight other strips
   // (v0.9.900, BB7). `svc-tabs` taşıdığı yapışkanlık v0.10.1987'de kalktı
   // (operatör): şerit sayfayla birlikte kayar; sınıf yalnız boşluğu taşır.
   return (
-    <UiTabStrip ariaLabel="Servis sekmeleri" className="svc-tabs" value={tab} onChange={onChange}
+    <UiTabStrip ariaLabel={tn('svc.tabs.aria')} className="svc-tabs" value={tab} onChange={onChange}
       tabs={items.map(it => {
         const label = <>{it.label}{it.hint && <span className="tab-count">{it.hint}</span>}</>;
         // v0.10.1336 — rehberli tur adım 3 çapası; TabStrip atomu düğmeye öznitelik geçirmez.

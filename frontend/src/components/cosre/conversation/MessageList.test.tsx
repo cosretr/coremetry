@@ -8,13 +8,22 @@
 //   • error: akan metin kalır, altında ⚠ satırı (role=alert)
 //   • stop: yarım metin + v1'in "yarım kaldı" notu
 //   • bilinmeyen / B3–B5 parçaları çizilmez, çökme yok; 👍/👎 yok
-import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
 import { cosreFixture, sseFetch } from '@/test/cosreSse';
 import { createCosreChat, type CosreChatCore } from '@/lib/cosre/useCosreChat';
 import { MessageList, type CosreChatStatus } from './MessageList';
+import { setUserLang } from '@/lib/i18n';
+// v0.10.2486 dilim 2 — metinler katalogda; bu test Türkçe arayüzü pinler.
+// localStorage Node'da yok/boş olabilir: dil tercihi için bellek içi depo.
+beforeEach(() => {
+  const mem = new Map<string, string>();
+  vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, String(v)); }, removeItem: (k: string) => { mem.delete(k); } });
+  setUserLang('tr');
+});
+afterEach(() => { setUserLang(null); vi.unstubAllGlobals(); });
 
 let host: HTMLDivElement | null = null;
 let root: Root | null = null;

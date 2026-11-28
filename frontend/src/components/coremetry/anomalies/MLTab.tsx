@@ -9,6 +9,8 @@ import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import { useMLScorecard } from '@/lib/queries';
 import type { MLEvent, MLDetectorScore, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus, MLThanosTick } from '@/lib/types';
 import { MLPublishGatesSection } from './MLPublishGates';
+import { MLPrecisionShadowReport } from './MLPrecisionShadowReport';
+import { precisionStatusOf } from './mlPrecisionShadow';
 import { MLSvcShadowCompareSection } from './MLSvcShadowCompare';
 import { EngineCompareSection } from './EngineCompare';
 import { ProblemGraphShadowSection } from './ProblemGraphShadow';
@@ -154,7 +156,9 @@ export interface DetectorRow { detector: string; signal: string; enabled: boolea
   /** v0.10.2063: son tikte kaynağı yoktu ("ölçülemedi: …"); sağlıklı DEĞİL. */
   unmeasured?: string;
   /** v0.10.2484 — precision programı B.1 satırı (sunucunun tek CH toplaması; yoksa boş satır). */
-  score?: MLDetectorScore }
+  score?: MLDetectorScore;
+  /** v0.10.2486 — otomatik gölge kuralı durumu (karne zarfı; eski sunucu → yok). */
+  shadow?: string }
 
 /** Karne satırları — SAF (test): tüm dedektörler, olay yoksa 0; açık/kapalı sunucunun `enabled` haritasından. */
 export function detectorRows(sc: MLScorecard, signal: MLSignal): DetectorRow[] {
@@ -163,7 +167,8 @@ export function detectorRows(sc: MLScorecard, signal: MLSignal): DetectorRow[] {
     const sc1 = byDet.get(d);
     const tick = sc.tick?.signals?.[detectorGroup(d)];
     return { detector: d, signal: sc.signals[d], enabled: sc.enabled?.[d] === true,
-      events: sc1?.events ?? 0, samples: sc1?.samples ?? 0, hitRate: sc1?.hitRate ?? 0, tick, unmeasured: tick?.unmeasured?.[d], score: sc1 };
+      events: sc1?.events ?? 0, samples: sc1?.samples ?? 0, hitRate: sc1?.hitRate ?? 0, tick, unmeasured: tick?.unmeasured?.[d], score: sc1,
+      shadow: sc.precisionShadow?.detectors?.[d]?.status };
   });
 }
 
@@ -308,6 +313,9 @@ const dcolsFor = (lang: Lang): ColumnDef<DetectorRow>[] => [
     sortValue: r => (r.score?.exempt || !r.samples || r.score?.insufficient ? -1 : r.score?.wilsonLo ?? r.hitRate),
     tone: r => (precisionCell(r.score).low ? 'err' : undefined) },
   { id: 'coverage', label: M('col.coverage', lang), width: 100, minWidth: 80, priority: 2, numeric: true, sortValue: r => r.score?.coverage ?? 0 },
+  // v0.10.2486 — precision B.2: otomatik gölge kuralı durumu (açık / düşerdi / gölgede / sabitlenmiş).
+  { id: 'shadow', label: M('col.shadow', lang), width: 130, minWidth: 100, priority: 2, sortValue: r => r.shadow ?? '', naturalDir: 'asc',
+    tone: r => (r.shadow === 'would_demote' || r.shadow === 'shadow' ? 'warn' : undefined) },
 ];
 // v0.10.2307 — İngilizce katalog tembel (lib/i18n.ts): EN kolonları modül
 // yüklenirken değil ilk kullanımda (etkin dil 'en' = katalog yüklü) kurulur.
@@ -404,6 +412,10 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
                     : <span className="text-muted-foreground" title={p.title}>{p.text}</span>;
                 }
                 case 'coverage': return r.score && r.events > 0 ? pct(r.score.coverage ?? 0, lang) : '—';
+                case 'shadow': {
+                  const st = precisionStatusOf(sc.data.precisionShadow, r.detector, lang);
+                  return st ? <span title={st.title} data-testid={`ml-shadow-${r.detector}`}>{st.text}</span> : '—';
+                }
                 default: return null;
               }
             }} />
@@ -413,6 +425,7 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
           <p className="m-0 text-[length:var(--fs-sm)] text-muted-foreground" data-testid="ml-precision-note">
             {M('precisionNote', lang)}
           </p>
+          <MLPrecisionShadowReport view={sc.data.precisionShadow} lang={lang} />
           <details data-testid="ml-tech-details" className="rounded-md border border-border px-3 py-2">
             <summary className="cursor-pointer text-[length:var(--fs-sm)] font-semibold text-muted-foreground">{M('tech', lang)}</summary>
             <div className="mt-2 flex flex-col gap-3">

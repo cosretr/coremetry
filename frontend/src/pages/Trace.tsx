@@ -64,6 +64,7 @@ import { useT } from '@/lib/i18n';
 import { clearTraceAiContext, publishTraceAiContext, traceChatContext } from '@/lib/traceAiContext'; // v0.10.944
 
 function TraceDetailInner() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   // v0.10.219 — breadcrumb'ın "Traces" halkası: /traces satırının Link
   // state'i ile taşıdığı liste URL'si (filtre + sayfa + range); yeni
   // sekmede / paylaşılan linkte state yok → çıplak /traces (traceBackHref).
@@ -490,8 +491,8 @@ function TraceDetailInner() {
   if (!id) {
     return (
       <>
-        <Topbar title="Trace" range={range} onRangeChange={setRange} />
-        <PageShell><Empty icon="⚠" title="Missing trace id" /></PageShell>
+        <Topbar title={tn('page.trace')} range={range} onRangeChange={setRange} />
+        <PageShell><Empty icon="⚠" title={tr('traceD.missingId')} /></PageShell>
       </>
     );
   }
@@ -535,7 +536,7 @@ function TraceDetailInner() {
                     traces". Same destination, just visually
                     promoted. */}
                 <Link to={`/trace/compare?a=${encodeURIComponent(id)}`}
-                      title="Compare this trace side-by-side with another (operation-level diff)"
+                      title={tr('traceD.compareTip')}
                       style={{
                         fontSize: 12, padding: '4px 12px',
                         display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -545,7 +546,7 @@ function TraceDetailInner() {
                         border: '1px solid color-mix(in oklab, var(--accent) 45%, transparent)',
                         borderRadius: 6,
                       }}>
-                  ↔ Compare trace
+                  {tr('traceD.compare')}
                 </Link>
                 {/* v0.10.1969 (operatör: "Logs, Metrics düğmelerine gerek yok; Share en sağda, Export ve
                     Kiosk menünün içinde") — eylem satırında yalnız Compare + Share kalır. */}
@@ -557,7 +558,7 @@ function TraceDetailInner() {
 
   return (
     <>
-      <Topbar title="Trace Detail" range={range} onRangeChange={setRange} />
+      <Topbar title={tn('page.trace')} range={range} onRangeChange={setRange} />
       <PageShell>
         {/* v0.10.219 (mockup onayı 2026-09-01, D4) — "← Back" (navigate(-1))
             yerine breadcrumb: Traces › <kök işlem>. Liste halkası, satırın
@@ -580,16 +581,16 @@ function TraceDetailInner() {
             <span className="trace-hdr__idlabel">{tr('trace.hdr.traceId')}:</span>
             {/* v0.10.1965 (operatör: "trace id tam gözükmüyor, kırpmışsın") — TAM id; 1527'deki 12 karakter kırpması kalktı. */}
             <code className="trace-hdr__id" title={id}>{id}</code>
-            <CopyButton value={id} title="Copy trace ID" />
+            <CopyButton value={id} title={tr('traceD.copyId')} />
             {spans && spans.length > 0 && (
               <>
                 {/* v0.10.922 (sade palet adım 1) — K5: sağlıklı trace NÖTR; yeşil
                     "OK" rozeti kalktı, görsel sinyal yalnız sapmada (ERROR). Kelime
                     ekran okuyucuya kalır (sr-only) — bilgi renge/yokluğa bırakılmaz. */}
                 {hasErr
-                  ? <span className="badge b-err">ERROR</span>
+                  ? <span className="badge b-err">ERROR</span> // i18n-exempt: OTel status code (ERROR/OK)
                   : <span className="sr-only">OK</span>}
-                {errSpans > 0 && <span className="cell-hint">{errSpans} error span{errSpans === 1 ? '' : 's'}</span>}
+                {errSpans > 0 && <span className="cell-hint">{tr(errSpans === 1 ? 'traceD.errSpan' : 'traceD.errSpans').replace('{n}', String(errSpans))}</span>}
               </>
             )}
           </div>
@@ -610,9 +611,10 @@ function TraceDetailInner() {
             <div className="trace-hdr__ident">
               {/* v0.10.219 (D4) — "← Back" yerine breadcrumb; liste halkası satırın
                   Link state'iyle gelen liste URL'sini korur. */}
-              <nav className="crumbs trace-hdr__crumbs" aria-label="Breadcrumb">
-                <Link to={traceBackHref(location.state)}>Traces</Link>
+              <nav className="crumbs trace-hdr__crumbs" aria-label={tr('traceD.crumbs')}>
+                <Link to={traceBackHref(location.state)}>{tr('nav.traces')}</Link>
                 <span className="crumbs__sep" aria-hidden="true">›</span>
+                {/* i18n-exempt: technical term (trace) */}
                 <span className="crumbs__cur">trace</span>
               </nav>
               {/* v0.10.1526 (operatör, prod 2026-10-24: "Service ismi POST yan yana olsun")
@@ -693,7 +695,7 @@ function TraceDetailInner() {
         </section>
 
         {spans === undefined && <Spinner />}
-        {spans === null && <Empty icon="⚠" title="Failed to load trace" />}
+        {spans === null && <Empty icon="⚠" title={tr('traceD.loadFailed')} />}
         {spans && spans.length === 0 && source === 'mv_only' && stub && (
           // v0.6.34 — aged-out stub. trace_summary_5m still has
           // the aggregates but raw spans dropped past the 30-day
@@ -708,29 +710,21 @@ function TraceDetailInner() {
               /* v0.10.810 — TTL içinde ama ham span hiçbir replikada yok: "yaşlandı" demek yalan olurdu. */
               <>
                 <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
-                  Ham span'lar bulunamadı — trace TTL içinde
+                  {tr('traceD.replicaMiss.title')}
                 </div>
                 <p style={{ fontSize: 12, color: 'var(--text2)', margin: '4px 0 12px', lineHeight: 1.5 }}>
-                  5 dakikalık özet MV bu trace'i taşıyor ama ham span satırları
-                  Distributed okumada da tüm replikalarda da bulunamadı; trace
-                  başlangıcı ham span TTL'inin içinde, yani yaşlanma değil.
-                  ClickHouse replikaları aynı veriyi taşımıyor olabilir (kopuk
-                  replikasyon / farklı ZooKeeper yolu). Bkz.{' '}
-                  <Link to="/system/clickhouse">Admin → ClickHouse → Replika tutarlılığı</Link>.
+                  {tr('traceD.replicaMiss.body')}{' '}
+                  <Link to="/system/clickhouse">{tr('traceD.replicaMiss.link')}</Link>.
                 </p>
               </>
             ) : (
               <>
                 <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
-                  Trace aged out of raw spans
+                  {tr('traceD.aged.title')}
                 </div>
                 <p style={{ fontSize: 12, color: 'var(--text2)', margin: '4px 0 12px', lineHeight: 1.5 }}>
-                  The 5-minute aggregate MV still holds this trace's summary
-                  (90-day retention), but the per-span detail data has been
-                  evicted by the raw spans TTL (default 30 days). Span
-                  waterfall isn't available for this trace anymore. To keep
-                  long-tail trace detail, configure Tempo backend in
-                  Settings → Tempo, or extend the raw-spans retention in
+                  {tr('traceD.aged.body')}
+                  {/* i18n-exempt: file name */}
                   <code> config.yaml</code>.
                 </p>
               </>
@@ -739,20 +733,20 @@ function TraceDetailInner() {
               display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
               gap: 8, marginTop: 8,
             }}>
-              <KPI label="Root service" value={stub.rootService || '—'} />
-              <KPI label="Root operation" value={stub.rootName || '—'} />
-              <KPI label="Span count" value={stub.spanCount.toLocaleString()} />
-              <KPI label="Errors" value={stub.errorCount.toLocaleString()}
+              <KPI label={tr('traceD.kpi.rootService')} value={stub.rootService || '—'} />
+              <KPI label={tr('traceD.kpi.rootOp')} value={stub.rootName || '—'} />
+              <KPI label={tr('traceD.kpi.spanCount')} value={stub.spanCount.toLocaleString()} />
+              <KPI label={tr('traceD.kpi.errors')} value={stub.errorCount.toLocaleString()}
                    tone={stub.errorCount > 0 ? 'err' : undefined} />
-              <KPI label="Duration"
+              <KPI label={tr('traceD.kpi.duration')}
                    value={stub.durationMs.toFixed(stub.durationMs < 10 ? 2 : 0) + ' ms'} />
-              <KPI label="Started"
+              <KPI label={tr('traceD.kpi.started')}
                    value={tsLong(stub.startTimeNs)} />
             </div>
           </div>
         )}
         {spans && spans.length === 0 && source !== 'mv_only' && (
-          <Empty icon="⋮" title="Trace not found" />
+          <Empty icon="⋮" title={tr('traceD.notFound')} />
         )}
         {spans && spans.length > 0 && (
           <>
@@ -775,19 +769,19 @@ function TraceDetailInner() {
             {/* Trace vs Logs (Uptrace-style) — uses the shared
                 .tab-strip pattern so it visually matches Settings,
                 Exceptions inbox, and Status Page admin tabs. */}
-            <TabStrip ariaLabel="Trace görünümü" value={tab} onChange={setTab} style={{ marginBottom: 10 }} tabs={[
-              { key: 'trace', label: <>Trace <span style={{ color: 'var(--text3)', marginLeft: 4 }}>{spans.length}</span></> },
+            <TabStrip ariaLabel={tr('traceD.tabsAria')} value={tab} onChange={setTab} style={{ marginBottom: 10 }} tabs={[
+              { key: 'trace', label: <>{tn('tab.trace')} <span style={{ color: 'var(--text3)', marginLeft: 4 }}>{spans.length}</span></> },
               // v0.8.407 — count covers ES logs + span-event rows once fetched;
               // before the lazy ES fetch a ● hints that the trace already
               // carries log-like span events (zero-cost signal — no ES query
               // fires until the tab opens).
-              { key: 'logs', label: <>Logs {logs
+              { key: 'logs', label: <>{tn('tab.logs')} {logs
                 ? <span style={{ color: 'var(--text3)', marginLeft: 4 }}>{logs.length + shownEventRows.length}</span>
                 : shownEventRows.length > 0
-                  ? <span style={{ color: 'var(--text3)', marginLeft: 4 }} title={`Bu trace'te ${shownEventRows.length} span event'i var`}>●</span>
+                  ? <span style={{ color: 'var(--text3)', marginLeft: 4 }} title={tr('traceD.eventsHint').replace('{n}', String(shownEventRows.length))}>●</span>
                   : null}</> },
               // v0.10.913 — pod sayısı span'lardan (ek sorgu yok); pod'suz trace'te "—".
-              { key: 'metrics', label: <>Metrics <span style={{ color: 'var(--text3)', marginLeft: 4 }}>{tracePodCount > 0 ? `${tracePodCount} pod` : '—'}</span></> },
+              { key: 'metrics', label: <>{tn('tab.metrics')} <span style={{ color: 'var(--text3)', marginLeft: 4 }}>{tracePodCount > 0 ? `${tracePodCount} pod` : '—'}</span></> },
             ]} />
 
             {tab === 'trace' && (
@@ -950,15 +944,15 @@ function SpanFilterBar({ spans, value, onChange, critCount, critShow, onCritShow
     <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center',
       gap: 8, flexWrap: 'wrap' }}>
       <input value={value} onChange={e => onChange(e.target.value)}
-        aria-label="Filter spans by name, service, or attribute value"
-        placeholder="Filter spans (name, service, attr value)…"
+        aria-label={t('traceD.filter.aria')}
+        placeholder={t('traceD.filter.ph')}
         style={{ flex: 1, maxWidth: 360, padding: '4px 10px', fontSize: 12,
                  background: 'var(--field-bg)', color: 'var(--text)',
                  border: '1px solid var(--border)', borderRadius: 4 }} />
       <span style={{ fontSize: 11, color: 'var(--text3)' }}>
         {value.trim()
-          ? `${matches} / ${spans.length} matching`
-          : `${spans.length} span${spans.length === 1 ? '' : 's'}`}
+          ? t('traceD.filter.matching').replace('{m}', String(matches)).replace('{n}', String(spans.length))
+          : t(spans.length === 1 ? 'traceD.filter.span' : 'traceD.filter.spans').replace('{n}', String(spans.length))}
       </span>
       {/* v0.10.924 — buton bütünlüğü Faz 2: `.facet` + role=button
           taklidi yerine gerçek düğme (Chip); Enter/Space'i tarayıcı verir,
@@ -984,9 +978,9 @@ function SpanFilterBar({ spans, value, onChange, critCount, critShow, onCritShow
       )}
       {critShow && onCritFocus && (critCount ?? 0) > 0 && (
         <Chip pill active={!!critFocus}
-          title="Dim every span that is NOT on the critical path"
+          title={t('traceD.critFocus.tip')}
           onClick={() => onCritFocus(!critFocus)}>
-          Critical path focus <span className="mono">{critCount}</span>
+          {t('traceD.critFocus')} <span className="mono">{critCount}</span>
         </Chip>
       )}
       {critShow && onCritOnly && (critCount ?? 0) > 0 && (
@@ -1006,17 +1000,17 @@ function SpanFilterBar({ spans, value, onChange, critCount, critShow, onCritShow
         const top = repeatGroups[0];
         const extra = repeatGroups.length - 1;
         const tip = [
-          `Bu trace'te tekrar eden çağrı desenleri (N+1 adayı) — tıkla: filtreyi kur + ×N grupla`,
+          t('traceD.repeat.tipHead'),
           '',
           ...repeatGroups.slice(0, 5).map(g =>
-            `${g.count}× ${g.service} · ${g.name} — toplam ${repeatTotalLabel(g.totalMs)}`),
-          ...(repeatGroups.length > 5 ? [`… +${repeatGroups.length - 5} desen daha`] : []),
+            t('traceD.repeat.tipRow').replace('{n}', String(g.count)).replace('{svc}', g.service).replace('{name}', g.name).replace('{total}', repeatTotalLabel(g.totalMs))),
+          ...(repeatGroups.length > 5 ? [t('traceD.repeat.tipMore').replace('{n}', String(repeatGroups.length - 5))] : []),
         ].join('\n');
         return (
           <Chip pill title={tip} onClick={() => onRepeatChip(top)}>
             <span className="s-warn">⚠</span> {shortName(top.name)} <span className="mono">×{top.count}</span>
             <span className="mono">· {repeatTotalLabel(top.totalMs)}</span>
-            {extra > 0 && <span className="mono">+{extra} desen</span>}
+            {extra > 0 && <span className="mono">{t('traceD.repeat.extra').replace('{n}', String(extra))}</span>}
           </Chip>
         );
       })()}
@@ -1036,6 +1030,7 @@ function SpanFilterBar({ spans, value, onChange, critCount, critShow, onCritShow
 // taşınır, bağlantılı trace'in kendi süresi DEĞİL. traceHref'in imzası
 // zaten olay-penceresi şeklini reddediyor (lib/traceHref.ts).
 function LinkedTracesSection({ id, pageRange }: { id: string; pageRange: TimeRange }) {
+  const t = useT();
   const q = useQuery({
     queryKey: ['trace-links', id],
     queryFn: () => api.traceLinks(id),
@@ -1081,21 +1076,21 @@ function LinkedTracesSection({ id, pageRange }: { id: string; pageRange: TimeRan
       <span style={{
         fontSize: 11, fontWeight: 600, color: 'var(--text2)',
         textTransform: 'uppercase', letterSpacing: '0.3px',
-      }} title="OTel span links — causal pointers this trace declares (→) or receives (←), e.g. producer→consumer or batch fan-in">
-        ⛓ Linked traces
+      }} title={t('traceD.links.tip')}>
+        {t('traceD.links.title')}
       </span>
       {linksCapped && (
         <span style={{ fontSize: 11, color: 'var(--warn)' }}
-          title="Yön başına ilk 100 bağlantı yüklendi — geniş fan-in/fan-out'ta (ör. batch consumer) aradığın producer/consumer bu listede olmayabilir.">
-          ⚠ ilk 100
+          title={t('traceD.links.capTip')}>
+          {t('traceD.links.cap')}
         </span>
       )}
       {rows.map(r => (
         <span key={`${r.dir}:${r.other}`}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <span style={{ color: 'var(--text3)', fontSize: 11 }}
-            title={r.dir === 'out' ? 'This trace links to' : 'Linked from another trace'}>
-            {r.dir === 'out' ? '→ links to' : '← linked from'}
+            title={r.dir === 'out' ? t('traceD.links.outTip') : t('traceD.links.inTip')}>
+            {r.dir === 'out' ? t('traceD.links.out') : t('traceD.links.in')}
           </span>
           {/* v0.10.977 — T5 tek monospace yığını: `var(--font-mono)` (tablo dışı
               öğelerde yazı boyu olduğu gibi kalır, yalnız yüz birleşti). */}
@@ -1103,11 +1098,11 @@ function LinkedTracesSection({ id, pageRange }: { id: string; pageRange: TimeRan
             style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
             {r.other.slice(0, 8)}…
           </Link>
-          <CopyButton value={r.other} title="Copy linked trace ID" />
+          <CopyButton value={r.other} title={t('traceD.links.copy')} />
           {r.attrs > 0 && (
             <span style={{ fontSize: 10, color: 'var(--text3)' }}
-              title="Link attributes on the span link">
-              · {r.attrs} attr{r.attrs === 1 ? '' : 's'}
+              title={t('traceD.links.attrsTip')}>
+              · {t(r.attrs === 1 ? 'traceD.links.attr' : 'traceD.links.attrs').replace('{n}', String(r.attrs))}
             </span>
           )}
         </span>
@@ -1149,6 +1144,7 @@ function SharePopover({ traceId, onExport, onKiosk }: {
   onKiosk?: () => void;
 }) {
   const confirm = useConfirm();
+  const t = useT();
   const { user } = useAuth();
   // v0.8.102 — minting a public link is now open to any authenticated
   // user, viewers included (operator request: viewers hand traces to
@@ -1232,7 +1228,7 @@ function SharePopover({ traceId, onExport, onKiosk }: {
       }
       void reloadShares();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to mint share link');
+      setError(e instanceof Error ? e.message : t('traceD.share.mintFailed'));
     } finally {
       setBusy(false);
     }
@@ -1251,11 +1247,10 @@ function SharePopover({ traceId, onExport, onKiosk }: {
     // görüyordu ve operatörün geri dönüş yolu yoktu (token yeniden
     // üretilemez, yenisi başka bir URL'dir).
     if (!await confirm({
-      title: 'Paylaşım linki iptal edilsin mi?',
-      body: <>…<code>{token.slice(-8)}</code> ile biten link <b>ANINDA</b>
-        geçersiz olacak. Linki elinde tutan herkes 404 görür; bu token
-        geri getirilemez, yeniden paylaşım YENİ bir URL üretir.</>,
-      confirmLabel: 'Linki iptal et',
+      title: t('traceD.share.revokeTitle'),
+      body: <>…<code>{token.slice(-8)}</code> {t('traceD.share.revokeBody1')} <b>{t('traceD.share.revokeNow')}</b>
+        {t('traceD.share.revokeBody2')}</>,
+      confirmLabel: t('traceD.share.revokeConfirm'),
       danger: true,
     })) return;
     try {
@@ -1268,7 +1263,7 @@ function SharePopover({ traceId, onExport, onKiosk }: {
       }
       void reloadShares();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Revoke failed');
+      setError(e instanceof Error ? e.message : t('traceD.share.revokeFailed'));
     }
   };
 
@@ -1284,17 +1279,17 @@ function SharePopover({ traceId, onExport, onKiosk }: {
       <Button variant="accent"
         ref={triggerRef}
         onClick={() => setOpen(o => !o)}
-        title="Share this trace"
+        title={t('traceD.share.tip')}
         aria-haspopup="dialog"
         aria-expanded={open}
         leftIcon={<IconLink />}>
-        Share
+        {t('traceD.share.btn')}
       </Button>
       {/* aria-label: role="dialog" without an accessible name is announced
           as a bare "dialog". Not aria-modal — focus is deliberately NOT
           trapped; this is a popover, and Esc/outside-click dismiss it. */}
       {open && (
-        <div role="dialog" aria-label="Share this trace" style={{
+        <div role="dialog" aria-label={t('traceD.share.tip')} style={{
           position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 'var(--z-popover)',
           width: 380, padding: 12,
           background: 'var(--bg2)', border: '1px solid var(--border)',
@@ -1303,16 +1298,16 @@ function SharePopover({ traceId, onExport, onKiosk }: {
           {/* Internal link section */}
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)',
                         textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 6 }}>
-            Internal link
+            {t('traceD.share.internal')}
           </div>
           <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8, lineHeight: 1.5 }}>
-            For Coremetry users — preserves your selected span, tab, and time range.
+            {t('traceD.share.internalHint')}
           </div>
           <Button variant="secondary" onClick={copyInternal}
             leftIcon={internalCopied ? <IconCheck /> : <IconLink />}
             style={{ width: '100%', display: 'inline-flex', justifyContent: 'center',
                      color: internalCopied ? 'var(--ok)' : undefined }}>
-            {internalCopied ? 'Copied' : 'Copy current URL'}
+            {internalCopied ? t('traceD.share.copied') : t('traceD.share.copyUrl')}
           </Button>
 
           {canShare && (
@@ -1323,27 +1318,27 @@ function SharePopover({ traceId, onExport, onKiosk }: {
           {/* Public link section */}
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)',
                         textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 6 }}>
-            Public link
+            {t('traceD.share.public')}
           </div>
           <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8, lineHeight: 1.5 }}>
-            Anyone with this URL can view a read-only snapshot — no Coremetry account needed.
+            {t('traceD.share.publicHint')}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 11 }}>
-            <span style={{ color: 'var(--text2)' }}>Expires in:</span>
+            <span style={{ color: 'var(--text2)' }}>{t('traceD.share.expiresIn')}</span>
             <select value={ttlHours}
               onChange={e => setTtlHours(Number(e.target.value))}
               style={{ fontSize: 11, padding: '2px 4px' }}>
-              <option value={1}>1 hour</option>
-              <option value={24}>24 hours</option>
-              <option value={24 * 7}>7 days</option>
-              <option value={24 * 30}>30 days</option>
+              <option value={1}>{t('traceD.share.ttl.h1')}</option>
+              <option value={24}>{t('traceD.share.ttl.h24')}</option>
+              <option value={24 * 7}>{t('traceD.share.ttl.d7')}</option>
+              <option value={24 * 30}>{t('traceD.share.ttl.d30')}</option>
             </select>
           </div>
           {!publicURL ? (
             <Button variant="primary" onClick={generatePublic} loading={busy}
               leftIcon={<IconLink />}
               style={{ width: '100%', display: 'inline-flex', justifyContent: 'center' }}>
-              Generate public link
+              {t('traceD.share.generate')}
             </Button>
           ) : (
             <>
@@ -1354,13 +1349,13 @@ function SharePopover({ traceId, onExport, onKiosk }: {
                 <Button variant="secondary" size="sm" onClick={copyPublic}
                   leftIcon={publicCopied ? <IconCheck /> : <IconLink />}
                   className={publicCopied ? 'is-ok' : undefined}>
-                  {publicCopied ? 'Copied' : 'Copy'}
+                  {publicCopied ? t('traceD.share.copied') : t('traceD.share.copy')}
                 </Button>
               </div>
               {publicExpiresAt && (
                 <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 6 }}
                      title={tsLong(publicExpiresAt)}>
-                  Expires {tsRel(publicExpiresAt)}
+                  {t('traceD.share.expires').replace('{when}', tsRel(publicExpiresAt))}
                 </div>
               )}
             </>
@@ -1377,7 +1372,7 @@ function SharePopover({ traceId, onExport, onKiosk }: {
             <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--divider)' }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)',
                             textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 6 }}>
-                Active shares ({shares.length})
+                {t('traceD.share.active').replace('{n}', String(shares.length))}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {shares.map(s => (
@@ -1388,8 +1383,8 @@ function SharePopover({ traceId, onExport, onKiosk }: {
                     <span style={{
                       fontFamily: 'var(--font-mono)',
                       flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }} title={`${s.createdBy || 'unknown'} · expires ${tsLong(s.expiresAt)}`}>
-                      …{s.token.slice(-8)} · {s.createdBy || 'unknown'}
+                    }} title={t('traceD.share.rowTip').replace('{who}', s.createdBy || t('traceD.share.unknown')).replace('{when}', tsLong(s.expiresAt))}>
+                      …{s.token.slice(-8)} · {s.createdBy || t('traceD.share.unknown')}
                     </span>
                     <span style={{ fontSize: 10, color: 'var(--text3)', whiteSpace: 'nowrap' }}
                           title={tsLong(s.expiresAt)}>
@@ -1398,7 +1393,7 @@ function SharePopover({ traceId, onExport, onKiosk }: {
                     {canRevoke && (
                       <Button variant="ghost-danger" size="sm"
                         onClick={() => void revoke(s.token)}>
-                        Revoke
+                        {t('traceD.share.revoke')}
                       </Button>
                     )}
                   </div>
@@ -1410,20 +1405,21 @@ function SharePopover({ traceId, onExport, onKiosk }: {
           )}
           {(onExport || onKiosk) && (
             <div className="trace-share__more">
-              <div className="trace-share__more-h">Diğer</div>
+              <div className="trace-share__more-h">{t('traceD.share.more')}</div>
               <div className="trace-share__more-row">
                 {/* v0.10.1969 — eskiden eylem satırındaki ayrı düğmeler. */}
                 {onExport && (
                   <Button variant="secondary" size="sm" leftIcon={<IconDownload />}
                     onClick={() => { setOpen(false); onExport(); }}
-                    title="Download this trace as JSON (full span list with attributes + events)">
-                    Export JSON
+                    title={t('traceD.share.exportTip')}>
+                    {t('traceD.share.export')}
                   </Button>
                 )}
                 {onKiosk && (
                   <Button variant="secondary" size="sm"
                     onClick={() => { setOpen(false); onKiosk(); }}
-                    title="Kiosk: kromsuz tam ekran şelale + loglar, yeni pencerede">
+                    title={t('traceD.share.kioskTip')}>
+                    {/* i18n-exempt: product mode name */}
                     ⧉ Kiosk
                   </Button>
                 )}
@@ -1492,6 +1488,7 @@ function KPI({ label, value, tone }: {
 // değişince sorgu anahtarı da değişir, yani operatörün baktığı span kimliği
 // belirler. Descriptor yoksa/hata verirse eski yola düşülür (geriye dönük).
 function ExternalLinkButtons({ spans, traceId, selectedSpanId }: { spans: SpanRow[]; traceId: string; selectedSpanId: string | null }) {
+  const t = useT();
   const q = useQuery({ queryKey: ['external-links'], queryFn: () => api.externalLinks(), staleTime: 5 * 60_000 });
   const links = q.data?.links ?? [];
   // v0.10.568 — sunucuya HANGİ attribute anahtarlarını arayacağını söyleriz:
@@ -1526,10 +1523,10 @@ function ExternalLinkButtons({ spans, traceId, selectedSpanId }: { spans: SpanRo
   if (links.length === 0) return null;
   // v0.10.566 — grup: aynı gruptan yalnız ÇÖZÜLEN ilk link çizilir (birincil
   // {{requestId}}, yedek {{attr.function_id}}); grupsuz link bugünkü gibi tekil.
-  const rows = pickGroupedLinks(links, l => (ctx ? renderExternalLink(l.urlTemplate, ctx) : { url: undefined, missing: ['span yok'] as string[] }));
+  const rows = pickGroupedLinks(links, l => (ctx ? renderExternalLink(l.urlTemplate, ctx) : { url: undefined, missing: [t('traceD.ext.noSpan')] as string[] }));
   // Kimliğin nereden geldiğini tooltip söyler — operatör "neden bu link?"
   // sorusunu ekranda cevaplasın (log gövdesi mi, span attribute'u mu).
-  const srcNote = ident ? `kimlik: ${ident.source === 'log' ? 'log gövdesi' : ident.source === 'span' ? 'span attribute' : 'yok'}${ident.note ? ` — ${ident.note}` : ''}` : '';
+  const srcNote = ident ? t('traceD.ext.srcNote').replace('{src}', ident.source === 'log' ? t('traceD.ext.srcLog') : ident.source === 'span' ? t('traceD.ext.srcSpan') : t('traceD.ext.srcNone')) + (ident.note ? ` — ${ident.note}` : '') : '';
   // ASLA null sözleşmesi sunucuda; istemci yine de eski (identities taşımayan)
   // bir sürüme karşı dayanıklı: `?? []` → aday yok → bugünkü tek düğme.
   const identities = ident?.identities ?? [];
@@ -1568,6 +1565,7 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
   identities: TraceLinkCandidate[];
   srcNote: string;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -1581,8 +1579,8 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
   // Renk AYARDAN gelir (veri), token değil: marka rengi araca özgü; yazı --on-accent.
   const fill = l.color ? { background: l.color, borderColor: l.color, color: 'var(--on-accent)' } : undefined;
   const tip = ok
-    ? `${l.label} — yeni sekmede: ${url}`
-    : `${l.label}: bu trace'te çözülemeyen alanlar — ${missing.join(', ')}`;
+    ? t('traceD.ext.openTip').replace('{label}', l.label).replace('{url}', url)
+    : t('traceD.ext.missingTip').replace('{label}', l.label).replace('{fields}', missing.join(', '));
   const title = srcNote ? `${tip}\n${srcNote}` : tip;
   // v0.10.348 (operatör) — "Explain this trace" ile aynı boyut (md).
   const mainBtn = (withArrow: boolean) => {
@@ -1605,7 +1603,7 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
   // olur ve title eksikleri söyler — sessizce kaybolmaz.
   const resolved = identities.map(cand => {
     const octx = identityOverrideCtx(ctx, cand);
-    const r = octx ? renderExternalLink(l.urlTemplate, octx) : { url: undefined, missing: ['span yok'] as string[] };
+    const r = octx ? renderExternalLink(l.urlTemplate, octx) : { url: undefined, missing: [t('traceD.ext.noSpan')] as string[] };
     return { cand, url: r.url, missing: r.missing };
   });
   // request_id adayları üstte (birincil yol), span adayları anahtar anahtar altta.
@@ -1618,7 +1616,7 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
     const isLog = r.cand.source === 'log';
     const bucket = isLog ? logSections : spanSections;
     const key = r.cand.key || (isLog ? 'request_id' : 'span attribute');
-    const title = isLog ? `${key} · log gövdesinden` : key;
+    const title = isLog ? t('traceD.ext.fromLog').replace('{key}', key) : key;
     const g = bucket.find(x => x.title === title);
     if (g) g.items.push(r); else bucket.push({ title, items: [r] });
   }
@@ -1631,13 +1629,13 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
       {mainBtn(true)}
       <IconButton
         ref={triggerRef}
-        aria-label={`${l.label}: kimlik seç (${identities.length} aday)`}
+        aria-label={t('traceD.ext.pickAria').replace('{label}', l.label).replace('{n}', String(identities.length))}
         aria-haspopup="menu"
         aria-expanded={open}
         icon="▾"
         variant="secondary"
         size="md"
-        tooltip={`${identities.length} farklı kimlik — hangi işleme gidileceğini seç`}
+        tooltip={t('traceD.ext.pickTip').replace('{n}', String(identities.length))}
         onClick={() => setOpen(o => !o)}
         // v0.10.570 (operatör: "üst üste bindi sanki") — .btn-icon.ib-md SABİT
         // 28×28 kare; yanındaki Button md dolgudan daha uzun, yani ok kısa
@@ -1653,7 +1651,7 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
       {open && (
         <div
           role="menu"
-          aria-label={`${l.label} — kimlik seçimi`}
+          aria-label={t('traceD.ext.menuAria').replace('{label}', l.label)}
           style={{
             position: 'absolute', top: '100%', right: 0, marginTop: 4,
             minWidth: 300, maxWidth: 420, background: 'var(--bg2)',
@@ -1665,12 +1663,12 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
             display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12,
             padding: '4px 10px 6px', borderBottom: '1px solid var(--divider)', marginBottom: 4,
           }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Hangi işlem?</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{t('traceD.ext.which')}</span>
             {/* v0.10.568 — sunucu aday listesini 10'da kesebilir; sayıyı "tamam"
                 sanmasın diye kesilme notu BAŞLIKTA (tooltip'te kalsa menü açıkken
                 görünmezdi). */}
             <span style={{ fontSize: 11, color: 'var(--text3)' }} title={srcNote || undefined}>
-              {identities.length} farklı kimlik{srcNote.includes('gösterilmiyor') ? ' · liste kesildi' : ''}
+              {t('traceD.ext.count').replace('{n}', String(identities.length))}{srcNote.includes('gösterilmiyor') ? t('traceD.ext.truncated') : ''}
             </span>
           </div>
           {sections.map((sec, si) => (
@@ -1685,7 +1683,7 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
                   // bazılarında olmaması menüyü bozuk gösterirdi (.menuitem-icon).
                   icon={cand.used ? '●' : cand.isError ? '⚠' : ''}
                   // TAM değer title'da — kısaltma bilgi saklamaz.
-                  title={cu ? `${cand.value}\n${l.label} — yeni sekmede: ${cu}` : `${cand.value}\nbu kimlikle çözülemeyen alanlar — ${cm.join(', ')}`}
+                  title={cu ? `${cand.value}\n${t('traceD.ext.openTip').replace('{label}', l.label).replace('{url}', cu)}` : `${cand.value}\n${t('traceD.ext.candMissing').replace('{fields}', cm.join(', '))}`}
                   onClick={() => {
                     if (!cu) return;
                     setOpen(false);
@@ -1698,7 +1696,7 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
                       {/* v0.10.569 — gevşek eşleşme İLAN EDİLİR: "buldum" ile
                           "doğruladım" ayrı şeyler; operatör tıklamadan önce bilsin. */}
                       <span style={{ fontSize: 11, color: cand.loose ? 'var(--warn)' : 'var(--text3)' }}>
-                        {identityRoleTR(cand.role)}{cand.loose ? ' · biçim doğrulanmadı' : ''}
+                        {identityRoleTR(cand.role)}{cand.loose ? t('traceD.ext.loose') : ''}
                       </span>
                     </span>
                     <span style={{ fontSize: 11, color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis' }}>

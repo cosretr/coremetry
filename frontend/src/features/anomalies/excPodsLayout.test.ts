@@ -15,8 +15,8 @@ describe('exception detayı Pods · nodes (v0.10.173 → v0.10.734)', () => {
   it('panel sağ kolonda: Stack trace kartından SONRA, Sample traces kartından ÖNCE, aynı ızgarada', () => {
     const src = read('./ProblemDetail.tsx');
     const pods = src.indexOf('<ExceptionPodsPanel');
-    const samples = src.indexOf('<h3>Sample traces</h3>');
-    const stack = src.indexOf('<h3>Stack trace</h3>');
+    const samples = src.indexOf("<h3>{tl('probD.samples', lang)}</h3>") // v0.10.2486 — başlık katalogda;
+    const stack = src.indexOf("<h3>{tl('probD.stack', lang)}</h3>");
     const grid = src.indexOf('<div className="pd-cols pd-cols-11">');
     expect(grid).toBeGreaterThan(-1);
     expect(pods).toBeGreaterThan(stack);

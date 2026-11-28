@@ -53,7 +53,7 @@ import { httpEnvScopeNote, httpEnvScopeReady } from '@/lib/httpEnvScopeNote';
 import { ENDPOINT_LIST_POOL_MAX, endpointListRows, endpointListScope, listQueries, infraHiddenCountQuery, infraHiddenCount } from '@/lib/httpMetrics';
 import { useShowInfraRoutes, withInfraExclude, infraRouteRegexBody } from '@/lib/infraRoutes';
 import { InfraRoutesToggle } from '@/components/coremetry/InfraRoutesToggle';
-import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2305 — kalan Türkçe metinler arayüz dilinde (TR aynı)
+import { t, tf, useLang, useT } from '@/lib/i18n'; // v0.10.2305 — kalan Türkçe metinler arayüz dilinde (TR aynı)
 
 // /endpoints — operator-asked v0.5.365. Cross-service inbound
 // RED rollup keyed on http.route (templated) with url.path /
@@ -214,6 +214,7 @@ type EndpointLimit = typeof ENDPOINT_LIMITS[number];
 const ENDPOINTS_URL_SPEC = urlSpec({ limit: zParam(zOneOf(ENDPOINT_LIMITS), 100) });
 
 export default function EndpointsPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const lang = useLang();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -767,7 +768,7 @@ export default function EndpointsPage() {
 
   return (
     <>
-      <Topbar title="Endpoints" range={range} onRangeChange={setRange} envApplies sampling="endpoints" />
+      <Topbar title={tn('nav.endpoints')} range={range} onRangeChange={setRange} envApplies sampling="endpoints" />
       <PageShell>
         {/* v0.9.308 (brief N6c) — the page's whole selection already
             lives in the URL: service, search, cluster, limit, compare,

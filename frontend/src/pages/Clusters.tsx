@@ -34,7 +34,7 @@ import { FIELD_SURFACE } from '@/components/coremetry/Field/fieldSurface';
 import { ClusterCard } from '@/pages/clusters/ClusterCard';
 import { clusterState, fleetSentence, cpuUsageText, memUsageText, usageTone } from '@/pages/clusters/fleetSummary';
 import { api } from '@/lib/api';
-import { t, tf, fmtPctLang, useLang, type Lang } from '@/lib/i18n';
+import { t, tf, fmtPctLang, useLang, type Lang, useT } from '@/lib/i18n';
 import { useClusters } from '@/lib/queries';
 import { timeRangeToNs, fmtBytes, fmtNum } from '@/lib/utils';
 import { LIVE_META } from '@/lib/autoRefresh';
@@ -151,6 +151,7 @@ function pctTitle(what: string, ofLimit?: number, ofReq?: number): string {
 }
 
 export default function ClustersPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const [range, setRange] = useUrlRange('15m'); // inline namespace/pod trendi
   const lang = useLang(); // v0.10.2186 — CPU birimi + yüzde biçimi (i18n)
   const [params, setParams] = useSearchParams();
@@ -656,7 +657,7 @@ export default function ClustersPage() {
 
   return (
     <>
-      <Topbar title="Clusters" range={range} onRangeChange={setRange} />
+      <Topbar title={tn('nav.clusters')} range={range} onRangeChange={setRange} />
       <PageShell>
         {sourcesQ.isPending && <Spinner />}
         {!sourcesQ.isPending && sources.length === 0 && (
@@ -810,10 +811,10 @@ export default function ClustersPage() {
             <div className="cl-tabs-row">
               <Tabs value={section} onValueChange={k => setSection(k)}>
                 <TabsList variant="line" aria-label={t('clusters.tabs.aria', lang)}>
-                  <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="nodes">{`Nodes${section === 'nodes' && nodeRows.length > 0 ? ` (${nodeRows.length})` : ''}`}</TabsTrigger>
-                  <TabsTrigger value="namespaces">{`Namespaces${section === 'namespaces' && nsRows.length > 0 ? ` (${nsRows.length})` : ''}`}</TabsTrigger>
-                  <TabsTrigger value="pods">{`Pods${section === 'pods' && rows.length > 0 ? ` (${rows.length})` : ''}`}</TabsTrigger>
+                  <TabsTrigger value="overview">{t('tab.overview', lang)}</TabsTrigger>
+                  <TabsTrigger value="nodes">{`${t('tab.nodes', lang)}${section === 'nodes' && nodeRows.length > 0 ? ` (${nodeRows.length})` : ''}`}</TabsTrigger>
+                  <TabsTrigger value="namespaces">{`${t('tab.namespaces', lang)}${section === 'namespaces' && nsRows.length > 0 ? ` (${nsRows.length})` : ''}`}</TabsTrigger>
+                  <TabsTrigger value="pods">{`${t('tab.pods', lang)}${section === 'pods' && rows.length > 0 ? ` (${rows.length})` : ''}`}</TabsTrigger>
                 </TabsList>
               </Tabs>
               {/* v0.9.34 (F3) — namespace typeahead, sağ hizalı. Seçim

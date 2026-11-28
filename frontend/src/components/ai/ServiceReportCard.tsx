@@ -17,6 +17,7 @@ import { fmtNum } from '@/lib/utils';
 import { traceHref } from '@/lib/traceHref';
 import { fmtEvidenceTime, fmtRangeTR } from '@/lib/chatEvidence';
 import { chatLinkTargetProps, useChatLinkNewTab } from './chatLinkTarget';
+import { t, useLang } from '@/lib/i18n';
 import { exceptionGroupRows, fmtMs } from './operationCardView';
 import { drillLogsNote, verdictBadgeClass } from './serviceReportCardView';
 import { EvidenceChart } from './EvidenceChips';
@@ -28,6 +29,7 @@ function priorLabel(o: ChatServiceReportOp): string {
 }
 
 export function ServiceReportCard({ rep }: { rep: ChatServiceReportPayload }) {
+  const lang = useLang(); // v0.10.2486 dilim 2 — Hatalar bağlantısı menü adıyla
   const linkProps = chatLinkTargetProps(useChatLinkNewTab());
   const slow = rep.ops.slow ?? [];
   const erroring = rep.ops.erroring ?? [];
@@ -108,7 +110,7 @@ export function ServiceReportCard({ rep }: { rep: ChatServiceReportPayload }) {
       )}
 
       <div className="ev-sub">Teknik hatalar</div>
-      {rep.exceptionsError ? <div className="ev-empty">Exceptions okunamadı — "teknik hata yok" demek değil</div>
+      {rep.exceptionsError ? <div className="ev-empty">Hatalar okunamadı — "teknik hata yok" demek değil</div>
         : exRows.length === 0 ? <div className="ev-empty">son 3 saatte teknik hata grubu yok</div> : (
           <ul className="ev-list">
             {exRows.map(r => (
@@ -117,7 +119,7 @@ export function ServiceReportCard({ rep }: { rep: ChatServiceReportPayload }) {
                 {r.priority && <span className="cell-hint">{r.priority} </span>}
                 <span className={r.burst ? 'cell-err' : undefined}>{r.count}</span>
                 {r.lastSeen && <span className="cell-hint"> · {r.lastSeen}</span>}
-                {r.href && <> · <Link to={r.href} className="ev-link" {...linkProps}>Exceptions →</Link></>}
+                {r.href && <> · <Link to={r.href} className="ev-link" {...linkProps}>{t('nav.problems', lang)} →</Link></>}
               </li>
             ))}
           </ul>

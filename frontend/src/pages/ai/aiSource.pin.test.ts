@@ -16,8 +16,8 @@ const src = readFileSync(resolve(__dirname, '../AIObservability.tsx'), 'utf8')
 describe('v0.10.940 — /ai ?source=evalset', () => {
   it('kaynak URL\'den (paylaşılan link aynı görünümü açar)', () => {
     expect(src).toContain("searchParams.get('source') === 'evalset' ? 'evalset' : undefined");
-    expect(src).toContain('aria-label="Kaynak"');
-    expect(src).toContain('<option value="evalset">Değerlendirme</option>');
+    expect(src).toContain("aria-label={tn('aiObs.source')}"); // v0.10.2486 — katalogda
+    expect(src).toContain("<option value=\"evalset\">{tn('aiObs.source.eval')}</option>");
   });
 
   it('üç okuma da kaynağı taşır ve kaynak değişince yeniden okur', () => {

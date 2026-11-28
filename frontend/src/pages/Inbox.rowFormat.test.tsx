@@ -161,7 +161,7 @@ describe('Problems satırı — Exceptions biçimi (v0.10.1084)', () => {
     expect(sub.classList.contains('mono')).toBe(true);
     expect(sub.textContent).toBe('Read timed out');
     expect(cells[2].querySelector('.std-ctx .ib-occ')?.textContent).toBe('42 oluşum'); // v0.10.2121
-    expect(cells[8].textContent).toBe('Exception');
+    expect(cells[8].textContent).toBe('Hata') // v0.10.2486 — tek ad (exception = Hata);
   });
 
   it('v0.10.1529 — std satırı: özne mono · manşet, kaynak çipi + kanıt, etki, güven, ne zamandan beri, Karar', async () => {
@@ -192,7 +192,7 @@ describe('Problems satırı — Exceptions biçimi (v0.10.1084)', () => {
     expect(cells[3].querySelector('.std-impact__main')?.textContent).toBe('%0,7 hata · normal %0,05 (14×)');
     expect(cells[4].textContent).toBe('YÜKSEK');
     expect(cells[6].textContent).toContain('mobile-bff');
-    expect(cells[8].textContent).toBe('Alarm');
+    expect(cells[8].textContent).toBe('Kural') // v0.10.2486 — tek ad (alarm kuralı = Kural);
     expect(cells[9].textContent).toContain('beri');
     expect(cells[9].textContent).toContain('5 sa 40 dk · sürüyor');
     // D1 — editor iki düğmeyi görür; satır hover/focus'ta görünür (pv-row) —

@@ -29,7 +29,7 @@ describe('DB statement hedefli kural', () => {
     expect(alerts).toContain('<StatementPicker value={draft.target}');
     expect(alerts).toContain('targetMetrics(draft.target?.kind)'); // v0.10.554 — metrik ailesi hedef türüne göre
     expect(alerts).toContain("r.target ? 'DB STATEMENT'");
-    expect(alerts).toContain("isTarget ? '— all callers —'");
+    expect(alerts).toContain("isTarget ? tn('alertsP.cell.allCallers')"); // v0.10.2486 — katalogda
   });
   it('Statement sayfası: yazma rolüne Alarm oluştur + modal', () => {
     expect(stmt).toContain('<StatementAlertModal open onClose={() => setAlertOpen(false)}');

@@ -156,7 +156,7 @@ describe('Rollouts / çekmece / GitOps — İngilizce arayüz (v0.10.2304)', () 
     expect(bad).toEqual([]);
     for (const en of ['Live', 'Summary', 'Change', 'Image (old → new)', 'Status', 'Note', 'Generation',
       'Could not load the rollout list: HTTP 502', 'The reconciler saw no new revision', 'The KSM detector saw no generation increase',
-      'Deployment/Rollouts is off', 'Enable', 'The list was truncated on the server', 'Hidden platform namespaces: ',
+      'Changes is off', 'Enable', 'The list was truncated on the server', 'Hidden platform namespaces: ',
       'overrides this hiding', 'detector last run', 'Workloads with the most rollbacks', 'rate 25.0%', 'Avg. duration',
       'Could not load statistics', 'Transition', 'Timeline', 'Service health — before/after deploy (1)', 'previous: ', 'new: ',
       'Started (new ReplicaSet)', 'Completed (old version taken out)', 'Argo returned to a previously synced revision',
@@ -189,7 +189,7 @@ describe('Rollouts / çekmece / GitOps — Türkçe arayüzde metin aynen (v0.10
     const r = await all();
     for (const tr of ['Canlı', 'Toplu', 'Değişiklik', 'İmaj (eski → yeni)', 'Durum', 'Not', 'Nesil',
       'Rollout listesi yüklenemedi: HTTP 502', 'Reconciler aktif kümeye giren yeni revizyon görmedi', 'KSM dedektörü bu pencerede nesil artışı görmedi',
-      'Deployment/Rollouts kapalı', 'Etkinleştir', 'Liste sunucuda kesildi (limit 200) — pencereyi daralt.', "Gizlenen platform namespace'leri: ",
+      'Değişiklikler kapalı', 'Etkinleştir', 'Liste sunucuda kesildi (limit 200) — pencereyi daralt.', "Gizlenen platform namespace'leri: ",
       ' — açık namespace süzgeci «ns-sys-1» bu gizlemeyi geçersiz kılıyor', 'dedektör son koşu', "En çok rollback alan workload'lar", 'oran %25.0', 'Ort. süre',
       'İstatistik yüklenemedi', 'Geçiş', 'Zaman çizelgesi', 'Servis sağlığı — deploy öncesi/sonrası (1)', 'önceki: ', 'yeni: ',
       'Başladı (yeni ReplicaSet)', 'Completed (eski sürüm devreden çıktı)', 'güven %80', 'elle sync · op', 'geçmiş 4 senkron', ' · neden ProgressDeadlineExceeded',

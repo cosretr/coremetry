@@ -16,6 +16,7 @@ import { api } from '@/lib/api';
 import { fmtNs } from '@/lib/utils';
 import type { SpanRow, TraceDetailResponse } from '@/lib/types';
 import { traceHref } from '@/lib/traceHref';
+import { useT } from '@/lib/i18n';
 
 type CompareTab = 'split' | 'diff';
 
@@ -51,6 +52,7 @@ export default function TraceComparePage() {
 }
 
 function Inner() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   const [sp] = useSearchParams();
   const a = sp.get('a') ?? '';
   const b = sp.get('b') ?? '';
@@ -77,7 +79,7 @@ function Inner() {
   if (!a) {
     return (
       <>
-        <Topbar title="Trace compare" />
+        <Topbar title={tn('page.traceCompare')} />
         <PageShell>
           <Empty icon="↔" title="No trace selected">
             Open a trace and click <b>Compare ↔</b> to start a side-by-side comparison.
@@ -108,7 +110,7 @@ function Inner() {
   //     minHeight: 0`) aynısı.
   return (
     <>
-      <Topbar title="Trace compare" />
+      <Topbar title={tn('page.traceCompare')} />
       <PageShell>
         <div className="tc-fill">
         <div className="controls" style={{ marginBottom: 12, alignItems: 'center' }}>

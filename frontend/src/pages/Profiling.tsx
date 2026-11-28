@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { stopRowClick } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan); v0.10.1356 R4
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Topbar } from '@/components/Topbar';
+import { useT } from '@/lib/i18n';
 import { Empty } from '@/components/Spinner';
 import { IconFlame } from '@/components/icons';
 import { ServicePicker } from '@/components/ServicePicker';
@@ -48,6 +49,7 @@ const TYPES = [
 const profileHref = (p: ProfileRow) => `/profile?id=${p.profileId}`;
 
 export default function ProfilingPage() {
+  const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
   // URL-bound state so the service detail page can deep-link
   // operators into a pre-filtered profiling view (v0.5.161).
   // Range stays local — the topbar picker mutates it post-mount
@@ -126,7 +128,7 @@ export default function ProfilingPage() {
 
   return (
     <>
-      <Topbar title="Profiling" range={range} onRangeChange={setRange} />
+      <Topbar title={tn('nav.profiling')} range={range} onRangeChange={setRange} />
       <PageShell>
         <div className="controls">
           {/* View tabs — per-profile list (the original page)

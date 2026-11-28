@@ -76,7 +76,7 @@ describe('Sinyaller › servis süzgeci', () => {
 describe('Sinyaller sekmesi üst çubuğu ve detay bağlantıları', () => {
   it('başlık "Problems · Sinyaller", env seçici görünür ama uygulanmaz (eski Anomalies gibi; zaman seçici yok)', () => {
     render('/inbox?tab=signals', <SignalsTab strip={null} />);
-    expect(m.topbar[0]).toMatchObject({ title: 'Problems · Sinyaller', showEnv: true, envApplies: false });
+    expect(m.topbar[0]).toMatchObject({ title: 'Problemler · Sinyaller', showEnv: true, envApplies: false });
     expect(m.topbar[0].range).toBeUndefined();
   });
   it('?problem= / ?anomaly= iki sekmeden de açılır (detay sahibi Problemler)', () => {

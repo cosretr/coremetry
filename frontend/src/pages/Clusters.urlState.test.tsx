@@ -243,7 +243,7 @@ describe('Clusters S0 — sekme başına çağrı (açık olmayan sekme çekmez)
   // açılana kadar çekilmez; açılınca çekilir ve tercih tarayıcıda kalır.
   it('Overview (varsayılan): summary + iki kaynak trendi + alarm + node + namespace; ağ kapalı', async () => {
     const el = await mount('/clusters?cluster=prod-a');
-    expect(selectedTab(el)).toBe('Overview');
+    expect(selectedTab(el)).toBe('Genel') // v0.10.2486 — sekme adları katalogda (TR arayüz);
     expect(clusterCalls()).toEqual({
       clusterSources: 1, clusters: 1, clusterSummary: 1,
       clusterResourceTrend: 2, clusterAlerts: 1,
@@ -278,7 +278,7 @@ describe('Clusters S0 — sekme başına çağrı (açık olmayan sekme çekmez)
 
   it('Nodes: summary + node + namespace', async () => {
     const el = await mount('/clusters?cluster=prod-a&section=nodes');
-    expect(selectedTab(el)).toBe('Nodes (2)');
+    expect(selectedTab(el)).toBe("Node'lar (2)");
     expect(clusterCalls()).toEqual({
       clusterSources: 1, clusters: 1, clusterSummary: 1, clusterNodes: 1, clusterNamespaces: 1,
     });
@@ -287,7 +287,7 @@ describe('Clusters S0 — sekme başına çağrı (açık olmayan sekme çekmez)
 
   it('Namespaces: summary + namespace', async () => {
     const el = await mount('/clusters?cluster=prod-a&section=namespaces');
-    expect(selectedTab(el)).toBe('Namespaces (2)');
+    expect(selectedTab(el)).toBe("Namespace'ler (2)");
     expect(clusterCalls()).toEqual({
       clusterSources: 1, clusters: 1, clusterSummary: 1, clusterNamespaces: 1,
     });
@@ -295,7 +295,7 @@ describe('Clusters S0 — sekme başına çağrı (açık olmayan sekme çekmez)
 
   it('Pods: summary + pod + namespace', async () => {
     const el = await mount('/clusters?cluster=prod-a&section=pods');
-    expect(selectedTab(el)).toBe('Pods (4)');
+    expect(selectedTab(el)).toBe("Pod'lar (4)");
     expect(clusterCalls()).toEqual({
       clusterSources: 1, clusters: 1, clusterSummary: 1, clusterPods: 1, clusterNamespaces: 1,
     });
@@ -305,22 +305,22 @@ describe('Clusters S0 — sekme başına çağrı (açık olmayan sekme çekmez)
 describe('Clusters S0 — ?section', () => {
   it('sekme tıklaması ?section yazar, yabancı parametre ve ?cluster kalır', async () => {
     const el = await mount('/clusters?cluster=prod-a&range=1h');
-    click(tab(el, 'Nodes'));
+    click(tab(el, "Node'lar"));
     await until(() => sp().get('section') === 'nodes', '?section=nodes');
     expect(sp().get('cluster')).toBe('prod-a');
     expect(sp().get('range')).toBe('1h');
-    expect(selectedTab(el)).toMatch(/^Nodes/);
+    expect(selectedTab(el)).toMatch(/^Node'lar/);
     // Overview'a dönüş AÇIK yazılır (yokluk-türetmesine bırakılmaz).
-    click(tab(el, 'Overview'));
+    click(tab(el, 'Genel'));
     await until(() => sp().get('section') === 'overview', '?section=overview');
   });
 
   it('bilinmeyen ?section Overview; eski ?tab=nodes Nodes', async () => {
     let el = await mount('/clusters?cluster=prod-a&section=bogus');
-    expect(selectedTab(el)).toBe('Overview');
+    expect(selectedTab(el)).toBe('Genel');
     act(() => root!.unmount()); host?.remove(); root = null;
     el = await mount('/clusters?cluster=prod-a&tab=nodes');
-    expect(selectedTab(el)).toMatch(/^Nodes/);
+    expect(selectedTab(el)).toMatch(/^Node'lar/);
   });
 });
 
@@ -337,20 +337,20 @@ describe('Clusters S0 — K13 derin bağlantılar pod listesine düşer', () => 
 
   it('?service= (section yok): o servisin pod\'ları', async () => {
     const el = await mount('/clusters?cluster=prod-a&service=cart');
-    expect(selectedTab(el)).toMatch(/^Pods/);
+    expect(selectedTab(el)).toMatch(/^Pod'lar/);
     expect(rowTexts(el).length).toBe(2);
     expect(rowTexts(el).every(t => t.includes('cart-7d9f-'))).toBe(true);
   });
 
   it('servis sayfası pivotu (?section=pods&namespace=&service=) sekme görünümünde kalır', async () => {
     const el = await mount('/clusters?cluster=prod-a&section=pods&namespace=shop&service=cart');
-    expect(selectedTab(el)).toMatch(/^Pods/);
+    expect(selectedTab(el)).toMatch(/^Pod'lar/);
     expect(rowTexts(el).length).toBe(2);
   });
 
   it('?section=overview açıkken ?namespace= Overview\'u ezmez', async () => {
     const el = await mount('/clusters?cluster=prod-a&section=overview&namespace=shop');
-    expect(selectedTab(el)).toBe('Overview');
+    expect(selectedTab(el)).toBe('Genel');
     expect(callsOf('clusterPods').length).toBe(0);
   });
 });

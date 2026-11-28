@@ -38,7 +38,7 @@ describe('/traces satırı gerçek bir link', () => {
     // traceBackHref ile okur. Biri kaybolursa breadcrumb çıplak /traces'e
     // düşer — sessiz filtre kaybı.
     const trace = readFileSync(resolve(SRC, 'pages/Trace.tsx'), 'utf8');
-    expect(trace).toContain('<Link to={traceBackHref(location.state)}>Traces</Link>');
+    expect(trace).toContain("<Link to={traceBackHref(location.state)}>{tr('nav.traces')}</Link>"); // v0.10.2486 — menü adı
     // Kullanım biçimi aranıyor, sözcük değil (yorum tarihçe olarak anıyor).
     expect(trace).not.toContain('onClick={() => navigate(-1)}');
   });

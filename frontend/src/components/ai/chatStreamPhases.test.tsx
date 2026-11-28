@@ -18,6 +18,15 @@ import type { ChatStepDetail, ChatStreamEvent, ChatTurn } from '@/lib/types';
 import { useChatThread } from './useChatThread';
 import { applyChatDelta, phaseTrail } from './phaseTrail';
 import { ChatBubble } from './ChatBubble';
+import { setUserLang } from '@/lib/i18n';
+// v0.10.2486 dilim 2 — metinler katalogda; bu test Türkçe arayüzü pinler.
+// localStorage Node'da yok/boş olabilir: dil tercihi için bellek içi depo.
+beforeEach(() => {
+  const mem = new Map<string, string>();
+  vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, String(v)); }, removeItem: (k: string) => { mem.delete(k); } });
+  setUserLang('tr');
+});
+afterEach(() => { setUserLang(null); vi.unstubAllGlobals(); });
 
 const d = (i: number, over: Partial<ChatStepDetail> = {}): ChatStepDetail => ({ i, tool: `tool_${i}`, ...over });
 
